@@ -36,6 +36,7 @@
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/CullFace>
+#include <osgDB/ReadFile>
 
 #include "dart/gui/osg/render/MeshShapeNode.hpp"
 #include "dart/gui/osg/Utils.hpp"
@@ -173,30 +174,59 @@ bool checkSpecularSanity(const aiColor4D& c)
   return true;
 }
 
+
+//==============================================================================
+std::string toText(const aiColor4D& c)
+{
+  std::string s;
+  s += std::to_string(c.r) + " "
+     + std::to_string(c.g) + " "
+     + std::to_string(c.b) + " "
+     + std::to_string(c.a);
+
+  return s;
+}
+
+
 //==============================================================================
 void MeshShapeNode::extractData(bool firstTime)
 {
   const aiScene* scene = mMeshShape->getMesh();
   const aiNode* root = scene->mRootNode;
 
-  if(firstTime) // extract material properties
+  if(firstTime) // extract material and texture properties
   {
     mMaterials.reserve(scene->mNumMaterials);
 
+    std::cout << "nm: " << scene->mNumMaterials << std::endl;
     for(std::size_t i=0; i<scene->mNumMaterials; ++i)
     {
       aiMaterial* aiMat = scene->mMaterials[i];
-      ::osg::ref_ptr<::osg::Material> material = new ::osg::Material;
+      ::osg::ref_ptr< ::osg::Material> material = new ::osg::Material;
 
       aiColor4D c;
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_AMBIENT, &c)==AI_SUCCESS)
       {
+        std::cout << "got ambient: " << toText(c) << std::endl;
         material->setAmbient(::osg::Material::FRONT_AND_BACK,
                              ::osg::Vec4(c.r, c.g, c.b, c.a));
+
+        if(aiMat->GetTextureCount(aiTextureType_AMBIENT) > 0)
+        {
+          aiString s;
+          aiMat->GetTexture(aiTextureType_AMBIENT, 0, &s);
+          std::cout << "got ambient texture: " << s.C_Str() << std::endl;
+          ::osg::ref_ptr< ::osg::Texture2D> texture = new ::osg::Texture2D;
+          ::osg::Image* teximage = osgDB::readImageFile(s.C_Str());
+          texture->setImage(teximage);
+
+          mTextures[material.get()] = texture;
+        }
       }
 
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_DIFFUSE, &c)==AI_SUCCESS)
       {
+        std::cout << "got diffuse: " << toText(c) << std::endl;
         material->setDiffuse(::osg::Material::FRONT_AND_BACK,
                              ::osg::Vec4(c.r, c.g, c.b, c.a));
       }
@@ -205,6 +235,8 @@ void MeshShapeNode::extractData(bool firstTime)
       {
         // Some files have insane specular vectors like [1.0, 1.0, 1.0, 1.0], so
         // we weed those out here
+
+        std::cout << "got specular: " << toText(c) << std::endl;
         if(checkSpecularSanity(c))
           material->setSpecular(::osg::Material::FRONT_AND_BACK,
                                 ::osg::Vec4(c.r, c.g, c.b, c.a));
@@ -212,6 +244,7 @@ void MeshShapeNode::extractData(bool firstTime)
 
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_EMISSIVE, &c)==AI_SUCCESS)
       {
+        std::cout << "got emissive: " << toText(c) << std::endl;
         material->setEmission(::osg::Material::FRONT_AND_BACK,
                               ::osg::Vec4(c.r, c.g, c.b, c.a));
       }
@@ -234,6 +267,14 @@ void MeshShapeNode::extractData(bool firstTime)
 
       mMaterials.push_back(material);
     }
+
+//    std::cout << "nt: " << scene->mNumTextures << std::endl;
+//    for(size_t i=0; i < scene->mNumTextures; ++i)
+//    {
+//      aiTexture* aiTex = scene->mTextures[i];
+//      ::osg::ref_ptr< ::osg::Texture2D> texture = new ::osg::Texture2D;
+//      aiTex->
+//    }
   }
 
   if(   mShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_TRANSFORM)
@@ -637,8 +678,9 @@ void MeshShapeGeometry::extractData(bool firstTime)
     }
   }
 
+  const aiScene* scene = mMeshShape->getMesh();
   // Load textures on the first pass through
-  if(firstTime)
+  if(firstTime && scene->HasMaterials())
   {
     uint unit = 0;
     const aiVector3D* aiTexCoords = mAiMesh->mTextureCoords[unit];
@@ -693,6 +735,17 @@ void MeshShapeGeometry::extractData(bool firstTime)
         }
       } // switch(mAiMesh->mNumUVComponents[unit])
       aiTexCoords = mAiMesh->mTextureCoords[++unit];
+
+      const int mat = mAiMesh->mMaterialIndex;
+      ::osg::StateSet* ss = getOrCreateStateSet();
+      ::osg::ref_ptr< ::osg::Material> osgMat = mMainNode->mMaterials[mat];
+      ss->setAttribute(osgMat);
+
+      TextureMap::iterator it = mMainNode->mTextures.find(osgMat.get());
+      if(it != mMainNode->mTextures.end())
+      {
+        ss->setTextureAttributeAndModes(0, it->second, ::osg::StateAttribute::ON);
+      }
     } // while(nullptr != aiTexCoords)
   }
 }
