@@ -31,6 +31,8 @@
 
 #include <map>
 
+#include <iostream>
+
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/CullFace>
@@ -556,6 +558,8 @@ void MeshShapeGeometry::extractData(bool firstTime)
       // normal data per vertex
     }
 
+    std::cout << "nv: " << mVertices->size() << std::endl;
+
     setVertexArray(mVertices);
     if(mAiMesh->mNormals)
       setNormalArray(mNormals, ::osg::Array::BIND_PER_VERTEX);
@@ -641,38 +645,49 @@ void MeshShapeGeometry::extractData(bool firstTime)
 
     while(nullptr != aiTexCoords)
     {
-      switch(mAiMesh->mNumUVComponents[unit])
+      std::cout << "Texture: " << aiTexCoords << std::endl;
+      const int n = mAiMesh->mNumUVComponents[unit];
+      switch(n)
       {
         case 1:
         {
-          ::osg::ref_ptr<::osg::FloatArray> texture =
+          ::osg::ref_ptr< ::osg::FloatArray> texture =
               new ::osg::FloatArray(mAiMesh->mNumVertices);
           for(std::size_t i=0; i<mAiMesh->mNumVertices; ++i)
             (*texture)[i] = aiTexCoords[i].x;
+
+          std::cout << n << " tn: " << texture->size() << std::endl;
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
         }
         case 2:
         {
-          ::osg::ref_ptr<::osg::Vec2Array> texture =
+          ::osg::ref_ptr< ::osg::Vec2Array> texture =
               new ::osg::Vec2Array(mAiMesh->mNumVertices);
           for(std::size_t i=0; i<mAiMesh->mNumVertices; ++i)
           {
             const aiVector3D& t = aiTexCoords[i];
             (*texture)[i] = ::osg::Vec2(t.x, t.y);
           }
+
+          std::cout << n << " tn: " << texture->size() << std::endl;
+          for(size_t i=0; i < texture->size() && i < 10; ++i)
+            std::cout << (*texture)[i][0] << ", " << (*texture)[i][1] << std::endl;
+
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
         }
         case 3:
         {
-          ::osg::ref_ptr<::osg::Vec3Array> texture =
+          ::osg::ref_ptr< ::osg::Vec3Array> texture =
               new ::osg::Vec3Array(mAiMesh->mNumVertices);
           for(std::size_t i=0; i<mAiMesh->mNumVertices; ++i)
           {
             const aiVector3D& t = aiTexCoords[i];
             (*texture)[i] = ::osg::Vec3(t.x, t.y, t.z);
           }
+
+          std::cout << n << " tn: " << texture->size() << std::endl;
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
         }

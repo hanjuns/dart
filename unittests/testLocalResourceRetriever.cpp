@@ -33,6 +33,9 @@
 #include "dart/common/LocalResourceRetriever.hpp"
 #include "TestHelpers.hpp"
 
+#include "dart/dynamics/MeshShape.hpp"
+#include "dart/common/RelativeResourceRetriever.hpp"
+
 using dart::common::Uri;
 using dart::common::Resource;
 using dart::common::LocalResourceRetriever;
@@ -154,6 +157,18 @@ TEST(LocalResourceRetriever, retrieve_ResourceOperations)
   ASSERT_TRUE(resource->seek(0, Resource::SEEKTYPE_SET));
   ASSERT_EQ(1u, resource->read(buffer.data(), content.size(), 1));
   EXPECT_STREQ(content.c_str(), buffer.data());
+}
+
+TEST(LocalResourceRetriever, Mesh)
+{
+  const std::string path = "/home/grey/projects/posgraph/data/models/obj/FukushimaHallway.obj";
+  dart::common::ResourceRetrieverPtr relative =
+      std::make_shared<dart::common::RelativeResourceRetriever>("/home/grey/projects/posgraph/data/models/obj/");
+
+  dtwarn << "Loading mesh" << std::endl;
+
+  const aiScene* scene = MeshShape::loadMesh(path, relative);
+  dtwarn << "Finished loading mesh" << std::endl;
 }
 
 int main(int argc, char* argv[])
