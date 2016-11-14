@@ -316,22 +316,22 @@ protected:
   ::osg::ref_ptr<DefaultEventHandler> mDefaultEventHandler;
 
   /// The root node of this Viewer
-  ::osg::ref_ptr<::osg::Group> mRootGroup;
+  ::osg::ref_ptr< ::osg::Group> mRootGroup;
 
   /// The Group Node containing light sources
-  ::osg::ref_ptr<::osg::Group> mLightGroup;
+  ::osg::ref_ptr< ::osg::Group> mLightGroup;
 
   /// Non-headlights Light #1
-  ::osg::ref_ptr<::osg::Light> mLight1;
+  ::osg::ref_ptr< ::osg::Light> mLight1;
 
   /// Non-headlights LightSource #1
-  ::osg::ref_ptr<::osg::LightSource> mLightSource1;
+  ::osg::ref_ptr< ::osg::LightSource> mLightSource1;
 
   /// Non-headlights Light #2
-  ::osg::ref_ptr<::osg::Light> mLight2;
+  ::osg::ref_ptr< ::osg::Light> mLight2;
 
   /// Non-headlights LightSource #2
-  ::osg::ref_ptr<::osg::LightSource> mLightSource2;
+  ::osg::ref_ptr< ::osg::LightSource> mLightSource2;
 
   /// Vector pointing upwards
   ::osg::Vec3 mUpwards;

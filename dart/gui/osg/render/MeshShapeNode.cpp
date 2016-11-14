@@ -219,6 +219,9 @@ void MeshShapeNode::extractData(bool firstTime)
           ::osg::ref_ptr< ::osg::Texture2D> texture = new ::osg::Texture2D;
           ::osg::Image* teximage = osgDB::readImageFile(s.C_Str());
           texture->setImage(teximage);
+          texture->setWrap( ::osg::Texture2D::WRAP_S, ::osg::Texture2D::REPEAT);
+          texture->setWrap( ::osg::Texture2D::WRAP_T, ::osg::Texture2D::REPEAT);
+          texture->setWrap( ::osg::Texture2D::WRAP_R, ::osg::Texture2D::REPEAT);
 
           mTextures[material.get()] = texture;
         }
@@ -281,10 +284,10 @@ void MeshShapeNode::extractData(bool firstTime)
      || mShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_PRIMITIVE)
      || firstTime)
   {
-    Eigen::Matrix4d S(Eigen::Matrix4d::Zero());
-    const Eigen::Vector3d& s = mMeshShape->getScale();
-    S(0,0) = s[0]; S(1,1) = s[1]; S(2,2) = s[2]; S(3,3) = 1.0;
-    setMatrix(eigToOsgMatrix(S));
+//    Eigen::Matrix4d S(Eigen::Matrix4d::Zero());
+//    const Eigen::Vector3d& s = mMeshShape->getScale();
+//    S(0,0) = s[0]; S(1,1) = s[1]; S(2,2) = s[2]; S(3,3) = 1.0;
+//    setMatrix(eigToOsgMatrix(S));
   }
 
   if(mRootAiNode)
@@ -579,6 +582,8 @@ void MeshShapeGeometry::extractData(bool firstTime)
      || mShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_ELEMENTS)
      || firstTime)
   {
+    const Eigen::Vector3d& scale = mMeshShape->getScale();
+
     if(mVertices->size() != mAiMesh->mNumVertices)
       mVertices->resize(mAiMesh->mNumVertices);
 
@@ -588,7 +593,7 @@ void MeshShapeGeometry::extractData(bool firstTime)
     for(std::size_t i=0; i<mAiMesh->mNumVertices; ++i)
     {
       const aiVector3D& v = mAiMesh->mVertices[i];
-      (*mVertices)[i] = ::osg::Vec3(v.x, v.y, v.z);
+      (*mVertices)[i] = ::osg::Vec3(scale[0]*v.x, scale[1]*v.y, scale[2]*v.z);
 
       if(mAiMesh->mNormals)
       {
@@ -740,6 +745,9 @@ void MeshShapeGeometry::extractData(bool firstTime)
       ::osg::StateSet* ss = getOrCreateStateSet();
       ::osg::ref_ptr< ::osg::Material> osgMat = mMainNode->mMaterials[mat];
       ss->setAttribute(osgMat);
+
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
       TextureMap::iterator it = mMainNode->mTextures.find(osgMat.get());
       if(it != mMainNode->mTextures.end())
