@@ -31,8 +31,6 @@
 
 #include <map>
 
-#include <iostream>
-
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/CullFace>
@@ -198,7 +196,6 @@ void MeshShapeNode::extractData(bool firstTime)
   {
     mMaterials.reserve(scene->mNumMaterials);
 
-    std::cout << "nm: " << scene->mNumMaterials << std::endl;
     for(std::size_t i=0; i<scene->mNumMaterials; ++i)
     {
       aiMaterial* aiMat = scene->mMaterials[i];
@@ -207,7 +204,6 @@ void MeshShapeNode::extractData(bool firstTime)
       aiColor4D c;
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_AMBIENT, &c)==AI_SUCCESS)
       {
-        std::cout << "got ambient: " << toText(c) << std::endl;
         material->setAmbient(::osg::Material::FRONT_AND_BACK,
                              ::osg::Vec4(c.r, c.g, c.b, c.a));
 
@@ -215,7 +211,6 @@ void MeshShapeNode::extractData(bool firstTime)
         {
           aiString s;
           aiMat->GetTexture(aiTextureType_AMBIENT, 0, &s);
-          std::cout << "got ambient texture: " << s.C_Str() << std::endl;
           ::osg::ref_ptr< ::osg::Texture2D> texture = new ::osg::Texture2D;
           ::osg::Image* teximage = osgDB::readImageFile(s.C_Str());
           texture->setImage(teximage);
@@ -229,7 +224,6 @@ void MeshShapeNode::extractData(bool firstTime)
 
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_DIFFUSE, &c)==AI_SUCCESS)
       {
-        std::cout << "got diffuse: " << toText(c) << std::endl;
         material->setDiffuse(::osg::Material::FRONT_AND_BACK,
                              ::osg::Vec4(c.r, c.g, c.b, c.a));
       }
@@ -239,7 +233,6 @@ void MeshShapeNode::extractData(bool firstTime)
         // Some files have insane specular vectors like [1.0, 1.0, 1.0, 1.0], so
         // we weed those out here
 
-        std::cout << "got specular: " << toText(c) << std::endl;
         if(checkSpecularSanity(c))
           material->setSpecular(::osg::Material::FRONT_AND_BACK,
                                 ::osg::Vec4(c.r, c.g, c.b, c.a));
@@ -247,7 +240,6 @@ void MeshShapeNode::extractData(bool firstTime)
 
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_EMISSIVE, &c)==AI_SUCCESS)
       {
-        std::cout << "got emissive: " << toText(c) << std::endl;
         material->setEmission(::osg::Material::FRONT_AND_BACK,
                               ::osg::Vec4(c.r, c.g, c.b, c.a));
       }
@@ -604,8 +596,6 @@ void MeshShapeGeometry::extractData(bool firstTime)
       // normal data per vertex
     }
 
-    std::cout << "nv: " << mVertices->size() << std::endl;
-
     setVertexArray(mVertices);
     if(mAiMesh->mNormals)
       setNormalArray(mNormals, ::osg::Array::BIND_PER_VERTEX);
@@ -692,7 +682,6 @@ void MeshShapeGeometry::extractData(bool firstTime)
 
     while(nullptr != aiTexCoords)
     {
-      std::cout << "Texture: " << aiTexCoords << std::endl;
       const int n = mAiMesh->mNumUVComponents[unit];
       switch(n)
       {
@@ -703,7 +692,6 @@ void MeshShapeGeometry::extractData(bool firstTime)
           for(std::size_t i=0; i<mAiMesh->mNumVertices; ++i)
             (*texture)[i] = aiTexCoords[i].x;
 
-          std::cout << n << " tn: " << texture->size() << std::endl;
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
         }
@@ -717,9 +705,6 @@ void MeshShapeGeometry::extractData(bool firstTime)
             (*texture)[i] = ::osg::Vec2(t.x, t.y);
           }
 
-          std::cout << n << " tn: " << texture->size() << std::endl;
-          for(size_t i=0; i < texture->size() && i < 10; ++i)
-            std::cout << (*texture)[i][0] << ", " << (*texture)[i][1] << std::endl;
 
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
@@ -734,7 +719,6 @@ void MeshShapeGeometry::extractData(bool firstTime)
             (*texture)[i] = ::osg::Vec3(t.x, t.y, t.z);
           }
 
-          std::cout << n << " tn: " << texture->size() << std::endl;
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
         }

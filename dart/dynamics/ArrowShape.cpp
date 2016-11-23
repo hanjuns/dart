@@ -60,6 +60,7 @@ ArrowShape::ArrowShape(const Eigen::Vector3d& _tail,
     mHead(_head),
     mProperties(_properties)
 {
+  setColorMode(SHAPE_COLOR);
   instantiate(_resolution);
   configureArrow(mTail, mHead, mProperties);
   setColorMode(MeshShape::COLOR_INDEX);

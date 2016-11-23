@@ -33,8 +33,105 @@
 #include <dart/gui/osg/osg.hpp>
 #include <dart/utils/utils.hpp>
 
+#include <memory>
+
 using namespace dart::dynamics;
 using namespace dart::simulation;
+
+const Eigen::Vector4d LeftColor = dart::Color::Blue(0.5);
+const Eigen::Vector4d RightColor = dart::Color::Fuschia(0.5);
+const Eigen::Vector4d SelectedColor = Eigen::Vector4d(1.0, 0.0, 0.0, 0.2);
+
+struct Box
+{
+  bool left;
+
+  dart::dynamics::SimpleFramePtr node;
+
+  Box(const Eigen::Isometry3d& T = Eigen::Isometry3d::Identity())
+    : left(true),
+      node(nullptr)
+  {
+    // Do nothing
+  }
+};
+
+void printBox(const std::shared_ptr<Box>& box)
+{
+  Eigen::Vector3d scale = std::dynamic_pointer_cast<BoxShape>(
+        box->node->getShape())->getSize();
+  Eigen::Vector3d v = box->node->getRelativeTransform().translation();
+
+  std::cout << "ADD_BOX(";
+  for(size_t i=0; i < 3; ++i)
+    std::cout << v[i] << ", ";
+
+  for(size_t i=0; i < 3; ++i)
+    std::cout << scale[i] << ", ";
+
+  if(box->left)
+    std::cout << "1 ";
+  else
+    std::cout << "0 ";
+
+  std::cout << ");" << std::endl;
+}
+
+class Viewer : public dart::gui::osg::Viewer
+{
+public:
+
+  void setupCustomLights(size_t version = 1)
+  {
+    switchHeadlights(false);
+
+    mLight1->setAmbient( ::osg::Vec4(0.4,0.4,0.4,1.0));
+
+    const osg::Vec3 p1 = mUpwards+osg::Vec3(0, 1, 0);
+    const osg::Vec3 p2 = mUpwards+osg::Vec3(1, 0, 0);
+
+    if(1 == version)
+    {
+      mLight1->setPosition(osg::Vec4( p1[0], p1[1], p1[2], 0.0));
+      mLight2->setPosition(osg::Vec4(-p2[0], p2[1], p2[2], 0.0));
+    }
+    else if(2 == version)
+    {
+      mLight1->setPosition(osg::Vec4(p1[0], -p1[1], p1[2], 0.0));
+      mLight2->setPosition(osg::Vec4(p2[0],  p2[1], p2[2], 0.0));
+    }
+    else if(3 == version)
+    {
+      mLight1->setPosition(osg::Vec4(p1[0], p1[1], p1[2], 0.0));
+      mLight2->setPosition(osg::Vec4(p2[0], p2[1], p2[2], 0.0));
+    }
+    else if(4 == version)
+    {
+      mLight1->setPosition(osg::Vec4( p1[0], -p1[1], p1[2], 0.0));
+      mLight2->setPosition(osg::Vec4(-p2[0],  p2[1], p2[2], 0.0));
+    }
+    else if(5 == version)
+    {
+      mLight1->setPosition(osg::Vec4(-p2[0], p2[1], p2[2], 0.0));
+      mLight2->setPosition(osg::Vec4( p1[0], p1[1], p1[2], 0.0));
+    }
+    else if(6 == version)
+    {
+      mLight1->setPosition(osg::Vec4(p2[0],  p2[1], p2[2], 0.0));
+      mLight2->setPosition(osg::Vec4(p1[0], -p1[1], p1[2], 0.0));
+    }
+    else if(7 == version)
+    {
+      mLight1->setPosition(osg::Vec4(p2[0], p2[1], p2[2], 0.0));
+      mLight2->setPosition(osg::Vec4(p1[0], p1[1], p1[2], 0.0));
+    }
+    else if(8 == version)
+    {
+      mLight1->setPosition(osg::Vec4(-p2[0],  p2[1], p2[2], 0.0));
+      mLight2->setPosition(osg::Vec4( p1[0], -p1[1], p1[2], 0.0));
+    }
+  }
+};
 
 class RelaxedPosture : public dart::optimizer::Function
 {
@@ -700,6 +797,8 @@ protected:
 
 };
 
+class InputHandler;
+
 class TeleoperationWorld : public dart::gui::osg::WorldNode
 {
 public:
@@ -748,73 +847,11 @@ public:
     }
   }
 
-  void customPreRefresh() override
-  {
-    if(mAnyMovement)
-    {
-      Eigen::Isometry3d old_tf = mHubo->getBodyNode(0)->getWorldTransform();
-      Eigen::Isometry3d new_tf = Eigen::Isometry3d::Identity();
-      Eigen::Vector3d forward = old_tf.linear().col(0);
-      forward[2] = 0.0;
-      if(forward.norm() > 1e-10)
-        forward.normalize();
-      else
-        forward.setZero();
-
-      Eigen::Vector3d left = old_tf.linear().col(1);
-      left[2] = 0.0;
-      if(left.norm() > 1e-10)
-        left.normalize();
-      else
-        left.setZero();
-
-      const Eigen::Vector3d& up = Eigen::Vector3d::UnitZ();
-
-      double linearStep = 0.01;
-      double elevationStep = 0.2*linearStep;
-      double rotationalStep = 2.0*M_PI/180.0;
-
-      if(mAmplifyMovement)
-      {
-        linearStep *= 2.0;
-        elevationStep *= 2.0;
-        rotationalStep *= 2.0;
-      }
-
-      if(mMoveComponents[MOVE_W])
-        new_tf.translate( linearStep*forward);
-
-      if(mMoveComponents[MOVE_S])
-        new_tf.translate(-linearStep*forward);
-
-      if(mMoveComponents[MOVE_A])
-        new_tf.translate( linearStep*left);
-
-      if(mMoveComponents[MOVE_D])
-        new_tf.translate(-linearStep*left);
-
-      if(mMoveComponents[MOVE_F])
-        new_tf.translate( elevationStep*up);
-
-      if(mMoveComponents[MOVE_Z])
-        new_tf.translate(-elevationStep*up);
-
-      if(mMoveComponents[MOVE_Q])
-        new_tf.rotate(Eigen::AngleAxisd( rotationalStep, up));
-
-      if(mMoveComponents[MOVE_E])
-        new_tf.rotate(Eigen::AngleAxisd(-rotationalStep, up));
-
-      new_tf.pretranslate(old_tf.translation());
-      new_tf.rotate(old_tf.rotation());
-
-      mHubo->getJoint(0)->setPositions(FreeJoint::convertToPositions(new_tf));
-    }
-
-    mHubo->getIK(true)->solve();
-  }
+  void customPreRefresh() override;
 
   bool mAmplifyMovement;
+
+  InputHandler* mInput;
 
 protected:
 
@@ -841,18 +878,114 @@ class InputHandler : public ::osgGA::GUIEventHandler
 {
 public:
 
-  InputHandler(dart::gui::osg::Viewer* viewer, TeleoperationWorld* teleop,
+  InputHandler(Viewer* viewer, TeleoperationWorld* teleop,
                const SkeletonPtr& hubo, const WorldPtr& world)
     : mViewer(viewer),
       mTeleop(teleop),
       mHubo(hubo),
       mWorld(world)
   {
+    mTeleop->mInput = this;
     initialize();
+  }
+
+  std::shared_ptr<Box> createBox()
+  {
+    std::shared_ptr<Box> box = std::make_shared<Box>();
+    Eigen::Vector3d s(0.5*Eigen::Vector3d::Ones());
+    Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+    tf.translation()[2] += s[2]/2.0;
+    box->node = std::make_shared<SimpleFrame>(
+          mHubo->getEndEffector("l_foot"),
+          "box_"+std::to_string(numBoxes), tf);
+    ++numBoxes;
+
+    BoxShapePtr shape = std::make_shared<BoxShape>(s);
+    shape->addDataVariance(Shape::DYNAMIC_COLOR);
+    shape->addDataVariance(Shape::DYNAMIC_PRIMITIVE);
+    box->node->setShape(shape);
+    box->node->createVisualAspect();
+
+    boxes.push_back(box);
+
+    mWorld->addSimpleFrame(box->node);
+
+    mSelectedBox = boxes.size()-1;
+    selectBox();
+
+    return box;
+  }
+
+  void flipBox(std::shared_ptr<Box> box)
+  {
+    const Eigen::Vector3d v = box->node->getRelativeTransform().translation();
+    const Eigen::Vector3d s = std::dynamic_pointer_cast<BoxShape>(
+          box->node->getShape())->getSize();
+
+    ADD_BOX(v[0], v[1], v[2], s[0], s[1], s[2], box->left? 1 : 0, true);
+  }
+
+  void ADD_BOX(double v0, double v1, double v2,
+               double s0, double s1, double s2,
+               int l, bool flip = false)
+  {
+    std::shared_ptr<Box> box = createBox();
+    Eigen::Vector3d v(v0, v1, v2);
+    Eigen::Vector3d s(s0, s1, s2);
+    bool left = l!=0;
+
+    if(flip)
+    {
+      v[1] = -v[1];
+      left = !left;
+    }
+
+    std::dynamic_pointer_cast<BoxShape>(box->node->getShape())->setSize(s);
+
+    std::cout << v.transpose() << " : " << s.transpose() << std::endl;
+
+    Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+    tf.translation() = v;
+    box->node->setRelativeTransform(tf);
+
+    box->left = left;
+    if(left)
+      box->node->setParentFrame(mHubo->getEndEffector("l_foot"));
+    else
+      box->node->setParentFrame(mHubo->getEndEffector("r_foot"));
+
+    selectBox();
+  }
+
+  void createInitialBoxes()
+  {
+//    ADD_BOX(-0.11, 0.005, 0.076, 0.225, 0.15, 0.175, 1 );
+//    ADD_BOX(-0.109144, -0.0590679, 0.337675, 0.35, 0.55, 0.35, 1 );
+
+    ADD_BOX(-0.11, 0.005, 0.076, 0.225, 0.15, 0.175, 1 );
+    ADD_BOX(-0.109144, 0.0103071, 0.337675, 0.5, 0.4, 0.35, 1 );
+    ADD_BOX(-0.15, 0.11, 0.813, 0.8, 0.6, 0.6, 1 );
+    ADD_BOX(-0.15, 0.01, 1.21087, 0.35, 0.4, 0.2, 1 );
+    ADD_BOX(-0.11, -0.005, 0.076, 0.225, 0.15, 0.175, 0 );
+    ADD_BOX(-0.109144, -0.0103071, 0.337675, 0.5, 0.4, 0.35, 0 );
+    ADD_BOX(-0.15, -0.11, 0.813, 0.8, 0.6, 0.6, 0 );
+    ADD_BOX(-0.15, -0.01, 1.21087, 0.35, 0.4, 0.2, 0 );
+
+
+    mSelectedBox = -1;
+    selectBox();
   }
 
   void initialize()
   {
+    ds = 0.05;
+    dx = 0.01;
+    mSelectedBox = -1;
+    currentBox = nullptr;
+    currentDnD = nullptr;
+    numBoxes = 0;
+    mLighting = 1;
+
     mRestConfig = mHubo->getPositions();
 
     for(std::size_t i=0; i < mHubo->getNumEndEffectors(); ++i)
@@ -867,15 +1000,17 @@ public:
       }
     }
 
-    mPosture = std::dynamic_pointer_cast<RelaxedPosture>(
-          mHubo->getIK(true)->getObjective());
+//    mPosture = std::dynamic_pointer_cast<RelaxedPosture>(
+//          mHubo->getIK(true)->getObjective());
 
-    mBalance = std::dynamic_pointer_cast<dart::constraint::BalanceConstraint>(
-          mHubo->getIK(true)->getProblem()->getEqConstraint(1));
+//    mBalance = std::dynamic_pointer_cast<dart::constraint::BalanceConstraint>(
+//          mHubo->getIK(true)->getProblem()->getEqConstraint(1));
 
     mOptimizationKey = 'r';
 
     mMoveComponents.resize(TeleoperationWorld::NUM_MOVE, false);
+
+    createInitialBoxes();
   }
 
   virtual bool handle(const ::osgGA::GUIEventAdapter& ea,
@@ -888,22 +1023,194 @@ public:
 
     if( ::osgGA::GUIEventAdapter::KEYDOWN == ea.getEventType() )
     {
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Right)
+      {
+        ++mLighting;
+        if(mLighting > 8)
+          mLighting = 8;
+
+        mViewer->setupCustomLights(mLighting);
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Left)
+      {
+        --mLighting;
+        if(mLighting == 0)
+          mLighting = 1;
+
+        mViewer->setupCustomLights(mLighting);
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Up )
+      {
+        selectNextBox();
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Down )
+      {
+        selectPrevBox();
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_BackSpace )
+      {
+        mSelectedBox = -1;
+        selectBox();
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Delete )
+      {
+        if(mSelectedBox < 0)
+          return true;
+
+        if(boxes.empty())
+        {
+          mSelectedBox = -1;
+          selectBox();
+          return true;
+        }
+
+        mTeleop->getWorld()->removeSimpleFrame(currentBox->node);
+        boxes.erase(boxes.begin()+mSelectedBox);
+        --mSelectedBox;
+
+        selectBox();
+      }
+
       if( ea.getKey() == 'p' )
       {
-        for(std::size_t i=0; i < mHubo->getNumDofs(); ++i)
-          std::cout << mHubo->getDof(i)->getName() << ": "
-                    << mHubo->getDof(i)->getPosition() << std::endl;
+//        for(std::size_t i=0; i < mHubo->getNumDofs(); ++i)
+//          std::cout << mHubo->getDof(i)->getName() << ": "
+//                    << mHubo->getDof(i)->getPosition() << std::endl;
+//        return true;
+
+
+        for(size_t i=0; i < boxes.size(); ++i)
+          printBox(boxes[i]);
+        std::cout << " ---- " << std::endl;
+
         return true;
       }
 
       if( ea.getKey() == 't' )
       {
         // Reset all the positions except for x, y, and yaw
-        for(std::size_t i=0; i < mHubo->getNumDofs(); ++i)
+//        for(std::size_t i=0; i < mHubo->getNumDofs(); ++i)
+//        {
+//          if( i < 2 || 4 < i )
+//            mHubo->getDof(i)->setPosition(mRestConfig[i]);
+//        }
+
+        if(!currentBox)
+          return true;
+
+        Eigen::Isometry3d tf = currentBox->node->getRelativeTransform();
+        tf.linear() = Eigen::Matrix3d::Identity();
+        currentBox->node->setRelativeTransform(tf);
+
+        return true;
+      }
+
+      if( ea.getKey() == '-' )
+      {
+        ds /= 2.0;
+        return true;
+      }
+
+      if( ea.getKey() == '=' )
+      {
+        ds *= 2.0;
+        return true;
+      }
+
+      if( ea.getKey() == '_' )
+      {
+        dx /= 2.0;
+        return true;
+      }
+
+      if( ea.getKey() == '+' )
+      {
+        dx *= 2.0;
+        return true;
+      }
+
+      if( ea.getKey() == '[' )
+      {
+        setScale(0, -ds);
+        return true;
+      }
+
+      if( ea.getKey() == ']' )
+      {
+        setScale(0, ds);
+        return true;
+      }
+
+      if( ea.getKey() == ';' )
+      {
+        setScale(1, -ds);
+        return true;
+      }
+
+      if( ea.getKey() == '\'' )
+      {
+        setScale(1, ds);
+        return true;
+      }
+
+      if( ea.getKey() == '.' )
+      {
+        setScale(2, -ds);
+        return true;
+      }
+
+      if( ea.getKey() == '/' )
+      {
+        setScale(2, ds);
+        return true;
+      }
+
+      if( ea.getKey() == 'm' )
+      {
+        createBox();
+        return true;
+      }
+
+      if( ea.getKey() == 'n' )
+      {
+        const size_t b = boxes.size();
+        for(size_t i=0; i < b; ++i)
+          flipBox(boxes[i]);
+        std::cout << " ---- " << std::endl;
+
+        return true;
+      }
+
+      if( ea.getKey() == 'l' )
+      {
+        if(!currentBox)
+          return true;
+
+        currentBox->left = !currentBox->left;
+        Eigen::Isometry3d tf = currentBox->node->getWorldTransform();
+
+        if(currentBox->left)
         {
-          if( i < 2 || 4 < i )
-            mHubo->getDof(i)->setPosition(mRestConfig[i]);
+          currentBox->node->setParentFrame(mHubo->getEndEffector("l_foot"));
+          currentBox->node->setTransform(tf);
         }
+        else
+        {
+          currentBox->node->setParentFrame(mHubo->getEndEffector("r_foot"));
+          currentBox->node->setTransform(tf);
+        }
+
+
         return true;
       }
 
@@ -920,6 +1227,7 @@ public:
 
             ik->getErrorMethod().setBounds(mDefaultBounds[index]);
             ik->getTarget()->setRelativeTransform(mDefaultTargetTf[index]);
+
             mWorld->removeSimpleFrame(ik->getTarget());
           }
           else if(ik)
@@ -930,6 +1238,7 @@ public:
             // bounds
             ik->getErrorMethod().setBounds();
             ik->getTarget()->setTransform(ee->getTransform());
+
             mWorld->addSimpleFrame(ik->getTarget());
           }
         }
@@ -1029,9 +1338,76 @@ public:
     return false;
   }
 
-protected:
+  void setScale(size_t id, double x)
+  {
+    if(!currentBox)
+      return;
 
-  dart::gui::osg::Viewer* mViewer;
+    Eigen::Vector3d scale = std::dynamic_pointer_cast<BoxShape>(
+          currentBox->node->getShape())->getSize();
+    scale[id] += x;
+
+    if(scale[id] <= 0)
+      return;
+
+    std::dynamic_pointer_cast<BoxShape>(currentBox->node->getShape())->
+        setSize(scale);
+  }
+
+  void selectBox()
+  {
+    currentBox = nullptr;
+    if(currentDnD)
+    {
+      mViewer->disableDragAndDrop(currentDnD);
+      currentDnD = nullptr;
+    }
+
+    for(size_t i=0; i < boxes.size(); ++i)
+    {
+      SimpleFramePtr sn = boxes[i]->node;
+      VisualAspect* visual = sn->getVisualAspect();
+      if(boxes[i]->left)
+        visual->setColor(LeftColor);
+      else
+        visual->setColor(RightColor);
+    }
+
+    if(mSelectedBox >= 0)
+    {
+      currentBox = boxes[mSelectedBox];
+      currentBox->node->getVisualAspect()->setColor(SelectedColor);
+      currentDnD = mViewer->enableDragAndDrop(currentBox->node.get());
+      currentDnD->setRotationOption(dart::gui::osg::DragAndDrop::RotationOption::ALWAYS_OFF);
+    }
+  }
+
+  void selectNextBox()
+  {
+    ++mSelectedBox;
+    if(mSelectedBox >= boxes.size())
+    {
+      if(boxes.empty())
+        mSelectedBox = -1;
+      else
+        mSelectedBox = 0;
+    }
+
+    selectBox();
+  }
+
+  void selectPrevBox()
+  {
+    --mSelectedBox;
+    if(mSelectedBox < 0)
+      mSelectedBox = boxes.size()-1;
+
+    selectBox();
+  }
+
+//protected:
+
+  Viewer* mViewer;
 
   TeleoperationWorld* mTeleop;
 
@@ -1056,7 +1432,103 @@ protected:
   char mOptimizationKey;
 
   std::vector<bool> mMoveComponents;
+
+  size_t mLighting;
+
+  int mSelectedBox;
+
+  std::vector<std::shared_ptr<Box>> boxes;
+
+  std::shared_ptr<Box> currentBox;
+  dart::gui::osg::SimpleFrameDnD* currentDnD;
+
+  size_t numBoxes;
+
+  double ds;
+  double dx;
 };
+
+
+void TeleoperationWorld::customPreRefresh()
+{
+  if(mAnyMovement)
+  {
+    Eigen::Isometry3d old_tf;
+
+    if(mInput->currentBox)
+      old_tf = mInput->currentBox->node->getWorldTransform();
+    else
+      old_tf = mHubo->getBodyNode(0)->getWorldTransform();
+
+    Eigen::Isometry3d new_tf = Eigen::Isometry3d::Identity();
+    Eigen::Vector3d forward = old_tf.linear().col(0);
+    forward[2] = 0.0;
+    if(forward.norm() > 1e-10)
+      forward.normalize();
+    else
+      forward.setZero();
+
+    Eigen::Vector3d left = old_tf.linear().col(1);
+    left[2] = 0.0;
+    if(left.norm() > 1e-10)
+      left.normalize();
+    else
+      left.setZero();
+
+    const Eigen::Vector3d& up = Eigen::Vector3d::UnitZ();
+
+    double linearStep = mInput->dx;
+    double elevationStep = 0.2*linearStep;
+    double rotationalStep = 2.0*M_PI/180.0;
+
+    if(mAmplifyMovement)
+    {
+      linearStep *= 2.0;
+      elevationStep *= 2.0;
+      rotationalStep *= 2.0;
+    }
+
+    if(mMoveComponents[MOVE_W])
+      new_tf.translate( linearStep*forward);
+
+    if(mMoveComponents[MOVE_S])
+      new_tf.translate(-linearStep*forward);
+
+    if(mMoveComponents[MOVE_A])
+      new_tf.translate( linearStep*left);
+
+    if(mMoveComponents[MOVE_D])
+      new_tf.translate(-linearStep*left);
+
+    if(mMoveComponents[MOVE_F])
+      new_tf.translate( elevationStep*up);
+
+    if(mMoveComponents[MOVE_Z])
+      new_tf.translate(-elevationStep*up);
+
+    if(mMoveComponents[MOVE_Q])
+      new_tf.rotate(Eigen::AngleAxisd( rotationalStep, up));
+
+    if(mMoveComponents[MOVE_E])
+      new_tf.rotate(Eigen::AngleAxisd(-rotationalStep, up));
+
+    new_tf.pretranslate(old_tf.translation());
+    new_tf.rotate(old_tf.rotation());
+
+
+    if(mInput->currentBox)
+    {
+      mInput->currentBox->node->setTransform(new_tf);
+    }
+    else
+    {
+      mHubo->getJoint(0)->setPositions(FreeJoint::convertToPositions(new_tf));
+    }
+  }
+
+  mHubo->getIK(true)->solve();
+}
+
 
 
 SkeletonPtr createGround()
@@ -1206,11 +1678,11 @@ void setupEndEffectors(const SkeletonPtr& hubo)
   double ground_dist = 0.01;
   tf_foot.translation() = Eigen::Vector3d(0.14, 0.0, -0.136+ground_dist);
 
-  linearBounds[2] = 1e-8;
+//  linearBounds[2] = 1e-8;
   Eigen::Vector3d ground_offset = ground_dist * Eigen::Vector3d::UnitZ();
 
-  angularBounds[0] = 1e-8;
-  angularBounds[1] = 1e-8;
+//  angularBounds[0] = 1e-8;
+//  angularBounds[1] = 1e-8;
 
   EndEffector* l_foot = hubo->getBodyNode("Body_LAR")->
       createEndEffector("l_foot");
@@ -1351,17 +1823,17 @@ void setupWholeBodySolver(const SkeletonPtr& hubo)
   upper_posture[1] =  0.50;
   upper_posture[5] =  0.95;
 
-  std::shared_ptr<RelaxedPosture> objective = std::make_shared<RelaxedPosture>(
-        hubo->getPositions(), lower_posture, upper_posture, weights);
+//  std::shared_ptr<RelaxedPosture> objective = std::make_shared<RelaxedPosture>(
+//        hubo->getPositions(), lower_posture, upper_posture, weights);
 
-  hubo->getIK()->setObjective(objective);
+//  hubo->getIK()->setObjective(objective);
 
-  std::shared_ptr<dart::constraint::BalanceConstraint> balance =
-      std::make_shared<dart::constraint::BalanceConstraint>(hubo->getIK());
-  hubo->getIK()->getProblem()->addEqConstraint(balance);
+//  std::shared_ptr<dart::constraint::BalanceConstraint> balance =
+//      std::make_shared<dart::constraint::BalanceConstraint>(hubo->getIK());
+//  hubo->getIK()->getProblem()->addEqConstraint(balance);
 
-  balance->setErrorMethod(dart::constraint::BalanceConstraint::FROM_CENTROID);
-  balance->setBalanceMethod(dart::constraint::BalanceConstraint::SHIFT_SUPPORT);
+//  balance->setErrorMethod(dart::constraint::BalanceConstraint::FROM_CENTROID);
+//  balance->setBalanceMethod(dart::constraint::BalanceConstraint::SHIFT_SUPPORT);
 
   solver->setNumMaxIterations(5);
 }
@@ -1377,17 +1849,35 @@ int main()
   Eigen::VectorXd positions = hubo->getPositions();
   // We make a clone to test whether the cloned version behaves the exact same
   // as the original version.
-  hubo = hubo->clone("hubo_copy");
+//  hubo = hubo->clone("hubo_copy");
   hubo->setPositions(positions);
 
   world->addSkeleton(hubo);
-  world->addSkeleton(createGround());
+//  world->addSkeleton(createGround());
+
+  dart::dynamics::SkeletonPtr env = Skeleton::create("scene");
+  dart::dynamics::BodyNode* bn = env->createJointAndBodyNodePair<
+      dart::dynamics::WeldJoint>().second;
+
+//  const std::string path = "/home/grey/projects/posgraph/data/models/LongJumpEnvObj/";
+  const std::string path = "/home/grey/projects/posgraph/data/models/UnevenEnvObj/";
+  const std::string file = path+"UnevenEnv.obj";
+  dart::common::ResourceRetrieverPtr relative =
+      std::make_shared<dart::common::RelativeResourceRetriever>(path);
+  const aiScene* scene = dart::dynamics::MeshShape::loadMesh(file, relative);
+  dart::dynamics::MeshShapePtr mesh = std::make_shared<MeshShape>(
+        0.0254*Eigen::Vector3d::Ones(), scene, file);
+  bn->createShapeNodeWith<dart::dynamics::VisualAspect,
+                          dart::dynamics::CollisionAspect>(mesh);
+
+  world->addSkeleton(env);
+
 
   setupWholeBodySolver(hubo);
 
   ::osg::ref_ptr<TeleoperationWorld> node = new TeleoperationWorld(world, hubo);
 
-  dart::gui::osg::Viewer viewer;
+  Viewer viewer;
   viewer.allowSimulation(false);
   viewer.addWorldNode(node);
 
@@ -1395,9 +1885,9 @@ int main()
 
   viewer.addEventHandler(new InputHandler(&viewer, node, hubo, world));
 
-  double display_elevation = 0.05;
-  viewer.addAttachment(new dart::gui::osg::SupportPolygonVisual(
-                         hubo, display_elevation));
+//  double display_elevation = 0.05;
+//  viewer.addAttachment(new dart::gui::osg::SupportPolygonVisual(
+//                         hubo, display_elevation));
 
   std::cout << viewer.getInstructions() << std::endl;
 
