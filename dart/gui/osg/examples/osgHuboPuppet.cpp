@@ -38,9 +38,10 @@
 using namespace dart::dynamics;
 using namespace dart::simulation;
 
-const Eigen::Vector4d LeftColor = dart::Color::Blue(0.5);
-const Eigen::Vector4d RightColor = dart::Color::Fuschia(0.5);
-const Eigen::Vector4d SelectedColor = Eigen::Vector4d(1.0, 0.0, 0.0, 0.2);
+const double DefaultAlpha = 0.15;
+const Eigen::Vector4d LeftColor = dart::Color::Blue(DefaultAlpha);
+const Eigen::Vector4d RightColor = dart::Color::Fuschia(DefaultAlpha);
+const Eigen::Vector4d SelectedColor = Eigen::Vector4d(1.0, 0.0, 0.0, DefaultAlpha);
 
 struct Box
 {
@@ -1214,6 +1215,93 @@ public:
         return true;
       }
 
+      if( ea.getKey() == 'j' )
+      {
+        std::vector<SimpleFramePtr> copies;
+        for(size_t i=0; i < boxes.size(); ++i)
+        {
+          if(!boxes[i]->left)
+            continue;
+
+          SimpleFramePtr copy = boxes[i]->node->clone();
+          copy->getVisualAspect()->setAlpha(DefaultAlpha + 0.4*(leftCopies.size()+1));
+          copies.push_back(copy);
+          mWorld->addSimpleFrame(copy);
+        }
+
+        leftCopies.push_back(copies);
+
+        return true;
+      }
+
+      if( ea.getKey() == 'J' )
+      {
+        if(leftCopies.empty())
+          return true;
+
+        const std::vector<SimpleFramePtr>& last = leftCopies.back();
+        for(size_t i=0; i < last.size(); ++i)
+          mWorld->removeSimpleFrame(last[i]);
+
+        leftCopies.pop_back();
+        return true;
+      }
+
+      if( ea.getKey() == 'k' )
+      {
+        std::vector<SimpleFramePtr> copies;
+        for(size_t i=0; i < boxes.size(); ++i)
+        {
+          if(boxes[i]->left)
+            continue;
+
+          SimpleFramePtr copy = boxes[i]->node->clone();
+          copy->getVisualAspect()->setAlpha(DefaultAlpha + 0.4*rightCopies.size());
+          copies.push_back(copy);
+          mWorld->addSimpleFrame(copy);
+        }
+
+        rightCopies.push_back(copies);
+      }
+
+      if( ea.getKey() == 'K' )
+      {
+        if(rightCopies.empty())
+          return true;
+
+        const std::vector<SimpleFramePtr>& last = rightCopies.back();
+        for(size_t i=0; i < last.size(); ++i)
+          mWorld->removeSimpleFrame(last[i]);
+
+        rightCopies.pop_back();
+        return true;
+      }
+
+      if( ea.getKey() == '`' )
+      {
+        for(size_t i=0; i < boxes.size(); ++i)
+        {
+          mWorld->removeSimpleFrame(boxes[i]->node);
+          boxes[i]->node->setParentFrame(Frame::World());
+        }
+
+        return true;
+      }
+
+      if( ea.getKey() == '~' )
+      {
+        for(size_t i=0; i < boxes.size(); ++i)
+        {
+          mWorld->addSimpleFrame(boxes[i]->node);
+          if(boxes[i]->left)
+            boxes[i]->node->setParentFrame(mHubo->getEndEffector("l_foot"));
+          else
+            boxes[i]->node->setParentFrame(mHubo->getEndEffector("r_foot"));
+        }
+
+        return true;
+      }
+
       if( '1' <= ea.getKey() && ea.getKey() <= '9' )
       {
         std::size_t index = ea.getKey() - '1';
@@ -1439,6 +1527,9 @@ public:
 
   std::vector<std::shared_ptr<Box>> boxes;
 
+  std::vector<std::vector<SimpleFramePtr>> leftCopies;
+  std::vector<std::vector<SimpleFramePtr>> rightCopies;
+
   std::shared_ptr<Box> currentBox;
   dart::gui::osg::SimpleFrameDnD* currentDnD;
 
@@ -1479,7 +1570,7 @@ void TeleoperationWorld::customPreRefresh()
 
     double linearStep = mInput->dx;
     double elevationStep = 0.2*linearStep;
-    double rotationalStep = 2.0*M_PI/180.0;
+    double rotationalStep = 2.0*M_PI/180.0/0.01*linearStep;
 
     if(mAmplifyMovement)
     {
@@ -1855,11 +1946,11 @@ int main()
   world->addSkeleton(hubo);
 //  world->addSkeleton(createGround());
 
+
   dart::dynamics::SkeletonPtr env = Skeleton::create("scene");
   dart::dynamics::BodyNode* bn = env->createJointAndBodyNodePair<
       dart::dynamics::WeldJoint>().second;
 
-//  const std::string path = "/home/grey/projects/posgraph/data/models/LongJumpEnvObj/";
   const std::string path = "/home/grey/projects/posgraph/data/models/UnevenEnvObj/";
   const std::string file = path+"UnevenEnv.obj";
   dart::common::ResourceRetrieverPtr relative =
@@ -1869,7 +1960,6 @@ int main()
         0.0254*Eigen::Vector3d::Ones(), scene, file);
   bn->createShapeNodeWith<dart::dynamics::VisualAspect,
                           dart::dynamics::CollisionAspect>(mesh);
-
   world->addSkeleton(env);
 
 
@@ -1878,6 +1968,7 @@ int main()
   ::osg::ref_ptr<TeleoperationWorld> node = new TeleoperationWorld(world, hubo);
 
   Viewer viewer;
+//  viewer.getCamera()->setClearColor(osg::Vec4(1.0, 1.0, 1.0, 1.0));
   viewer.allowSimulation(false);
   viewer.addWorldNode(node);
 
