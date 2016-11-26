@@ -38,10 +38,154 @@
 using namespace dart::dynamics;
 using namespace dart::simulation;
 
-const double DefaultAlpha = 0.15;
+const double DefaultAlpha = 0.3;
 const Eigen::Vector4d LeftColor = dart::Color::Blue(DefaultAlpha);
 const Eigen::Vector4d RightColor = dart::Color::Fuschia(DefaultAlpha);
+//const Eigen::Vector4d CopyRightColor = Eigen::Vector4d(1.0, 0.0, 0.15, DefaultAlpha);
+//const Eigen::Vector4d CopyRightColor = dart::Color::Orange(DefaultAlpha);
+const Eigen::Vector4d CopyRightColor = dart::Color::Green(DefaultAlpha);
 const Eigen::Vector4d SelectedColor = Eigen::Vector4d(1.0, 0.0, 0.0, DefaultAlpha);
+const Eigen::Vector4d MinimalColor = Eigen::Vector4d(1.0, 1.0, 0.0, 2*DefaultAlpha);
+//const Eigen::Vector4d MinimalColor = dart::Color::Orange(2*DefaultAlpha);
+
+const double AngleWeight = 1.0/(360*M_PI/180.0);
+double diff(const Eigen::Isometry3d& tf1, const Eigen::Isometry3d& tf2,
+            const double angleWeight = AngleWeight)
+{
+//  Eigen::Vector6d dx;
+//  dx.block<3,1>(3,0) = tf1.translation() - tf2.translation();
+
+//  Eigen::AngleAxisd aa(tf2.linear().transpose()*tf1.linear());
+//  dx.block<3,1>(0,0) = AngleWeight*aa.angle()*aa.axis();
+
+//  return dx.norm();
+
+
+  const double wR = angleWeight/(1+angleWeight);
+  const double wX = 1-wR;
+
+  const double X = (tf1.translation() - tf2.translation()).norm();
+
+  Eigen::AngleAxisd aa(tf2.linear().transpose()*tf1.linear());
+  const double R = std::abs(aa.angle());
+
+  return wX*X + wR*R;
+}
+
+Eigen::Isometry3d stepTowards(const Eigen::Isometry3d& target,
+                              const Eigen::Isometry3d& from,
+                              const double byNoMoreThan,
+                              const double angleWeight = AngleWeight)
+{
+  const double wR = angleWeight/(1+angleWeight);
+  const double wX = 1-wR;
+
+  const Eigen::Vector3d x = target.translation() - from.translation();
+  const double X = x.norm();
+  const Eigen::AngleAxisd aa(from.linear().transpose()*target.linear());
+  const double R = std::abs(aa.angle());
+
+  double cost = wX*X + wR*R;
+
+  if(cost > byNoMoreThan)
+  {
+    const double s = byNoMoreThan/cost;
+
+    const Eigen::Vector3d dx = s*x;
+    const double r = s*aa.angle();
+
+    Eigen::Isometry3d result = from;
+
+    result.rotate(Eigen::AngleAxisd(r, aa.axis()));
+    result.pretranslate(dx);
+
+    return result;
+  }
+
+  return target;
+}
+
+static void addBox(const SkeletonPtr& skel,
+                   Eigen::Vector3d lower,
+                   Eigen::Vector3d upper,
+                   const Eigen::Matrix3d& R = Eigen::Matrix3d::Identity(),
+                   const Eigen::Vector4d color = Eigen::Vector4d(0.0, 208.0, 255.0, 0.4*255.0)/255.0)
+{
+  const Eigen::Matrix3d Rinv = R.transpose();
+  lower = Rinv*lower;
+  upper = Rinv*upper;
+  const Eigen::Vector3d dim = upper - lower;
+
+  BodyNode* bn = skel->getBodyNode(0)->
+      createChildJointAndBodyNodePair<WeldJoint>().second;
+  bn->setName("component_"+std::to_string(skel->getNumBodyNodes()));
+  bn->getParentJoint()->setName(bn->getName());
+
+  BoxShapePtr shape = std::make_shared<BoxShape>(dim);
+  ShapeNode* node = bn->createShapeNodeWith<
+      VisualAspect, CollisionAspect, DynamicsAspect>(shape);
+  node->getVisualAspect()->setColor(color);
+  node->setRelativeTranslation(R*(dim/2.0 + lower));
+  node->setRelativeRotation(R);
+}
+
+SkeletonPtr getMinimalRobot(const SkeletonPtr& robot)
+{
+  SkeletonPtr minimal = robot->getBodyNode(0)->copyAs("minimal", false);
+
+  addBox(minimal,
+         Eigen::Vector3d(-0.1,  -0.086, 0.03),
+         Eigen::Vector3d( 0.06,  0.086, 0.25),
+         Eigen::Matrix3d::Identity(),
+         Eigen::Vector4d(1.0, 0.0, 0.0, 1.0));
+
+  for(size_t j=0; j < minimal->getNumBodyNodes(); ++j)
+  {
+    BodyNode* bn = minimal->getBodyNode(j);
+    for(size_t k=0; k < bn->getNumShapeNodes(); ++k)
+    {
+      ShapeNode* sn = bn->getShapeNode(k);
+      VisualAspect* visual = sn->getVisualAspect();
+      if(visual)
+        visual->setRGBA(MinimalColor);
+
+      MeshShapePtr shape = std::dynamic_pointer_cast<MeshShape>(sn->getShape());
+      if(shape)
+      {
+        shape->setColorMode(MeshShape::SHAPE_COLOR);
+      }
+    }
+  }
+
+  return minimal;
+}
+
+std::vector<dart::dynamics::SkeletonPtr> getFootprints()
+{
+  dart::dynamics::SkeletonPtr l_foot =
+      dart::dynamics::Skeleton::create("l_foot_print");
+  BodyNode* bn = l_foot->createJointAndBodyNodePair<FreeJoint>().second;
+  bn->setName("base"); bn->getParentJoint()->setName("base");
+
+  addBox(l_foot,
+         Eigen::Vector3d(-0.222, -0.072, -0.01),
+         Eigen::Vector3d(0.002, 0.079, 0.01),
+         Eigen::Matrix3d::Identity(),
+         dart::Color::Blue(0.7));
+
+  dart::dynamics::SkeletonPtr r_foot =
+      dart::dynamics::Skeleton::create("r_foot_print");
+  bn = r_foot->createJointAndBodyNodePair<FreeJoint>().second;
+  bn->setName("base"); bn->getParentJoint()->setName("base");
+
+  addBox(r_foot,
+         Eigen::Vector3d(-0.222, -0.079, -0.01),
+         Eigen::Vector3d(0.002, 0.072, 0.01),
+         Eigen::Matrix3d::Identity(),
+         dart::Color::Fuschia(0.7));
+
+  return {l_foot, r_foot};
+}
 
 struct Box
 {
@@ -76,6 +220,26 @@ void printBox(const std::shared_ptr<Box>& box)
     std::cout << "0 ";
 
   std::cout << ");" << std::endl;
+}
+
+void printConfigs(const std::vector<Eigen::VectorXd>& Q)
+{
+  for(size_t i=0; i < Q.size(); ++i)
+  {
+    std::cout << "ADD_CONFIG(";
+    Eigen::VectorXd q = Q[i];
+    for(size_t j=0; j < q.size(); ++j)
+    {
+      std::cout << q[j];
+      if(j < q.size()-1)
+        std::cout << ", ";
+      else
+        std::cout << ");";
+    }
+    std::cout << std::endl;
+  }
+
+  std::cout << "-----------\n" << std::endl;
 }
 
 class Viewer : public dart::gui::osg::Viewer
@@ -958,6 +1122,29 @@ public:
     selectBox();
   }
 
+  void ADD_CONFIG(std::vector<double>& X)
+  {
+    Eigen::VectorXd q(X.size());
+    for(size_t i=0; i < X.size(); ++i)
+      q[i] = X[i];
+
+    configs.push_back(q);
+  }
+
+  template<typename... R>
+  void ADD_CONFIG(std::vector<double>& X, double x, R... remainder)
+  {
+    X.push_back(x);
+    ADD_CONFIG(X, remainder...);
+  }
+
+  template<typename... R>
+  void ADD_CONFIG(double x, R... remainder)
+  {
+    std::vector<double> X;
+    ADD_CONFIG(X, x, remainder...);
+  }
+
   void createInitialBoxes()
   {
 //    ADD_BOX(-0.11, 0.005, 0.076, 0.225, 0.15, 0.175, 1 );
@@ -971,6 +1158,22 @@ public:
     ADD_BOX(-0.109144, -0.0103071, 0.337675, 0.5, 0.4, 0.35, 0 );
     ADD_BOX(-0.15, -0.11, 0.813, 0.8, 0.6, 0.6, 0 );
     ADD_BOX(-0.15, -0.01, 1.21087, 0.35, 0.4, 0.2, 0 );
+
+
+    ADD_CONFIG(-0.0064084, 0.0542555, 1.56454, 0.592375, -0.99157, 1.28162, 0.00726405, -0.0933735, -0.362946, 1.02419, -0.699833, 0.06266, 0.00723432, -0.09414, -0.393854, 1.06434, -0.709078, 0.0634271, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+    ADD_CONFIG(-0.0064084, 0.0542555, 1.56454, 0.592375, -0.99157, 1.28162, 0.00726405, -0.0933735, -0.773723, 0.976543, -0.241411, 0.06266, 0.00723432, -0.09414, -0.393854, 1.06434, -0.709078, 0.0634271, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+    ADD_CONFIG(-0.0064084, 0.0542555, 1.56454, 0.593812, -0.721574, 1.11362, 0.00649108, -0.113267, -0.614157, 1.77212, -1.19663, 0.0825683, 0.0075281, -0.0865599, -0.674375, 0.835819, -0.20001, 0.0558413, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+    ADD_CONFIG(-0.0044694, 0.0539438, 1.49475, 0.629892, -0.508705, 0.97962, 0.0797254, -0.0266514, -0.511336, 0.772974, -0.297831, -0.0067189, 0.079756, -0.0258067, -0.667968, 1.59744, -0.965661, -0.00756413, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+    ADD_CONFIG(-0.0044694, 0.0539438, 1.49475, 0.633645, -0.458847, 0.81562, 0.080138, -0.0152569, -0.876787, 1.66182, -0.821217, -0.0181209, 0.0799367, -0.0208173, -0.672125, 0.821822, -0.185886, -0.0125568, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+    ADD_CONFIG(0.412139, -0.411002, 1.56306, 0.626723, -0.258966, 0.62662, -0.0315267, 0.00263372, 0.0215828, 1.03206, -0.530868, -0.0106397, -0.0332993, 0.00570971, 0.0779193, 1.61739, -1.17253, -0.0141899, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+    ADD_CONFIG(0.412139, -0.411002, 1.56306, 0.618416, -0.0191102, 0.38312, -0.0244701, -0.00961172, 0.273572, 1.78769, -1.53846, 0.00349342, -0.0249461, -0.00878562, 0.0923191, 1.42418, -0.993705, 0.00253996, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+    ADD_CONFIG(0.412139, -0.411002, 1.56306, 0.617204, 0.0158689, 0.30512, -0.024206, -0.0100699, -0.0307712, 1.16854, -0.614962, 0.00402225, -0.0233843, -0.0114956, 0.0857103, 1.69058, -1.25347, 0.00566774, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+    ADD_CONFIG(0.412139, -0.411002, 1.56306, 0.60959, 0.235737, 0.16112, -0.0153117, -0.0254986, 0.273068, 1.55512, -1.30523, 0.0218302, -0.0181967, -0.0204951, 0.17082, 1.07825, -0.72618, 0.016055, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.611088, 0.295718, 0.0821198, 0.0289223, -0.0014629, -0.555767, 0.822249, -0.313728, 0.00817425, 0.0287901, -0.00426044, -0.690165, 1.59398, -0.951061, 0.0109749, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.615209, 0.460667, -0.0778802, 0.0292997, 0.00651962, -0.622584, 1.6217, -1.04636, 0.000182819, 0.0292956, 0.00643169, -0.55191, 0.897004, -0.39234, 0.000270843, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.619205, 0.620617, -0.16388, 0.0296934, 0.014844, -0.72101, 1.03975, -0.365995, -0.00815082, 0.0297301, 0.0156205, -0.458176, 1.31034, -0.899413, -0.00892819, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.624574, 0.83555, -0.18888, 0.030262, 0.0268645, -0.385879, 1.13876, -0.800144, -0.0201848, 0.0302556, 0.0267303, -0.766229, 1.20074, -0.481777, -0.0200504, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.626322, 0.905528, -0.18888, 0.0304413, 0.0306547, -0.653296, 1.2189, -0.612867, -0.0239792, 0.0304351, 0.030523, -0.647355, 1.22068, -0.620596, -0.0238474, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
 
 
     mSelectedBox = -1;
@@ -1012,6 +1215,44 @@ public:
     mMoveComponents.resize(TeleoperationWorld::NUM_MOVE, false);
 
     createInitialBoxes();
+    mViewer->getCamera()->getViewMatrixAsLookAt(eye, center, up);
+
+    c_index = -1;
+
+    minimals = getFootprints();
+    minimals.push_back(getMinimalRobot(mHubo));
+  }
+
+  void makeMinimalCopyWithFeet()
+  {
+    std::vector<SkeletonPtr> copies;
+
+    SkeletonPtr lf = minimals[0]->clone("lf_#"+std::to_string(minimalCopies.size()));
+    lf->setPositions(FreeJoint::convertToPositions(mHubo->getEndEffector("l_foot")->getWorldTransform()));
+    copies.push_back(lf);
+
+    SkeletonPtr rf = minimals[1]->clone("rf_#"+std::to_string(minimalCopies.size()));
+    rf->setPositions(FreeJoint::convertToPositions(mHubo->getEndEffector("r_foot")->getWorldTransform()));
+    copies.push_back(rf);
+
+    SkeletonPtr mc = minimals[2]->clone("mc_#"+std::to_string(minimalCopies.size()));
+    mc->setPositions(mHubo->getJoint(0)->getPositions());
+    copies.push_back(mc);
+
+    for(size_t i=0; i < copies.size(); ++i)
+      mWorld->addSkeleton(copies[i]);
+
+    minimalCopies.push_back(copies);
+  }
+
+  void makeMinimalCopy(const Eigen::Isometry3d tf)
+  {
+    std::vector<SkeletonPtr> copies;
+    SkeletonPtr mc = minimals[2]->clone("mc_#"+std::to_string(minimalCopies.size()));
+    mc->setPositions(FreeJoint::convertToPositions(tf));
+    copies.push_back(mc);
+    minimalCopies.push_back(copies);
+    mWorld->addSkeleton(mc);
   }
 
   virtual bool handle(const ::osgGA::GUIEventAdapter& ea,
@@ -1090,9 +1331,11 @@ public:
 //        return true;
 
 
-        for(size_t i=0; i < boxes.size(); ++i)
-          printBox(boxes[i]);
-        std::cout << " ---- " << std::endl;
+//        for(size_t i=0; i < boxes.size(); ++i)
+//          printBox(boxes[i]);
+//        std::cout << " ---- " << std::endl;
+
+        printConfigs(configs);
 
         return true;
       }
@@ -1113,6 +1356,70 @@ public:
         tf.linear() = Eigen::Matrix3d::Identity();
         currentBox->node->setRelativeTransform(tf);
 
+        return true;
+      }
+
+      if( ea.getKey() == 'y' )
+      {
+        mViewer->getCamera()->getViewMatrixAsLookAt(eye, center, up);
+        return true;
+      }
+
+      if( ea.getKey() == 'Y' )
+      {
+        mViewer->getCameraManipulator()->setHomePosition(eye, center, up);
+        mViewer->setCameraManipulator(mViewer->getCameraManipulator());
+        return true;
+      }
+
+      if( ea.getKey() == 'u' )
+      {
+        configs.push_back(mHubo->getPositions());
+        printConfigs(configs);
+        return true;
+      }
+
+      if( ea.getKey() == 'U' )
+      {
+        if(!configs.empty())
+          configs.pop_back();
+
+        return true;
+      }
+
+      if( ea.getKey() == 'h' )
+      {
+        ++c_index;
+        if(c_index >= configs.size())
+        {
+          if(configs.empty())
+          {
+            c_index = -1;
+            return true;
+          }
+
+          c_index = 0;
+        }
+
+        mHubo->setPositions(configs[c_index]);
+        return true;
+      }
+
+      if( ea.getKey() == 'H' )
+      {
+        --c_index;
+        if(c_index < 0)
+        {
+          if(configs.empty())
+          {
+            c_index = -1;
+            return true;
+          }
+
+          c_index = configs.size()-1;
+        }
+
+        mHubo->setPositions(configs[c_index]);
         return true;
       }
 
@@ -1224,7 +1531,8 @@ public:
             continue;
 
           SimpleFramePtr copy = boxes[i]->node->clone();
-          copy->getVisualAspect()->setAlpha(DefaultAlpha + 0.4*(leftCopies.size()+1));
+//          copy->getVisualAspect()->setAlpha(DefaultAlpha + 0.4*(leftCopies.size()+1));
+          copy->getVisualAspect()->setRGBA(CopyRightColor);
           copies.push_back(copy);
           mWorld->addSimpleFrame(copy);
         }
@@ -1256,7 +1564,8 @@ public:
             continue;
 
           SimpleFramePtr copy = boxes[i]->node->clone();
-          copy->getVisualAspect()->setAlpha(DefaultAlpha + 0.4*rightCopies.size());
+//          copy->getVisualAspect()->setAlpha(DefaultAlpha + 0.4*rightCopies.size());
+          copy->getVisualAspect()->setRGBA(CopyRightColor);
           copies.push_back(copy);
           mWorld->addSimpleFrame(copy);
         }
@@ -1299,6 +1608,94 @@ public:
             boxes[i]->node->setParentFrame(mHubo->getEndEffector("r_foot"));
         }
 
+        return true;
+      }
+
+      if( ea.getKey() == 'v' )
+      {
+        for(size_t i=0; i < rightCopies.size(); ++i)
+        {
+          const std::vector<SimpleFramePtr>& copies = rightCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->addSimpleFrame(copies[j]);
+        }
+
+        for(size_t i=0; i < leftCopies.size(); ++i)
+        {
+          const std::vector<SimpleFramePtr>& copies = leftCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->addSimpleFrame(copies[j]);
+        }
+
+        return true;
+      }
+
+      if( ea.getKey() == 'V' )
+      {
+        for(size_t i=0; i < rightCopies.size(); ++i)
+        {
+          const std::vector<SimpleFramePtr>& copies = rightCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->removeSimpleFrame(copies[j]);
+        }
+
+        for(size_t i=0; i < leftCopies.size(); ++i)
+        {
+          const std::vector<SimpleFramePtr>& copies = leftCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->removeSimpleFrame(copies[j]);
+        }
+
+        return true;
+      }
+
+      if( ea.getKey() == 'b' )
+      {
+//        if(minimalSweep.empty())
+//        {
+//          makeMinimalCopyWithFeet();
+//          return true;
+//        }
+
+        const double rho = 1e-2;
+        Eigen::Isometry3d tf = minimalSweep.front();
+        makeMinimalCopy(tf);
+        for(size_t i=1; i < minimalSweep.size(); ++i)
+        {
+          Eigen::Isometry3d next_tf = minimalSweep[i];
+          while(diff(next_tf, tf) > 1e-8)
+          {
+            tf = stepTowards(next_tf, tf, rho);
+            makeMinimalCopy(tf);
+          }
+        }
+
+        return true;
+      }
+
+      if( ea.getKey() == 'B' )
+      {
+        for(size_t i=0; i < minimalCopies.size(); ++i)
+        {
+          const std::vector<SkeletonPtr>& copies = minimalCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->removeSkeleton(copies[j]);
+        }
+
+        minimalCopies.clear();
+        return true;
+      }
+
+      if( ea.getKey() == 'i' )
+      {
+        makeMinimalCopyWithFeet();
+        minimalSweep.push_back(mHubo->getBodyNode(0)->getWorldTransform());
+        return true;
+      }
+
+      if( ea.getKey() == 'I' )
+      {
+        minimalSweep.pop_back();
         return true;
       }
 
@@ -1529,6 +1926,10 @@ public:
 
   std::vector<std::vector<SimpleFramePtr>> leftCopies;
   std::vector<std::vector<SimpleFramePtr>> rightCopies;
+  std::vector<std::vector<SkeletonPtr>> minimalCopies;
+  std::vector<Eigen::Isometry3d> minimalSweep;
+
+  std::vector<SkeletonPtr> minimals;
 
   std::shared_ptr<Box> currentBox;
   dart::gui::osg::SimpleFrameDnD* currentDnD;
@@ -1537,6 +1938,11 @@ public:
 
   double ds;
   double dx;
+
+  ::osg::Vec3 eye, center, up;
+
+  std::vector<Eigen::VectorXd> configs;
+  int c_index;
 };
 
 
