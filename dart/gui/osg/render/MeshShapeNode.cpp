@@ -240,6 +240,7 @@ void MeshShapeNode::extractData(bool firstTime)
 
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_EMISSIVE, &c)==AI_SUCCESS)
       {
+        std::cout << "got emissive: " << toText(c) << std::endl;
         material->setEmission(::osg::Material::FRONT_AND_BACK,
                               ::osg::Vec4(c.r, c.g, c.b, c.a));
       }
@@ -595,7 +596,6 @@ void MeshShapeGeometry::extractData(bool firstTime)
       // TODO(MXG): Consider computing normals for meshes that don't come with
       // normal data per vertex
     }
-
 
     setVertexArray(mVertices);
     if(mAiMesh->mNormals)

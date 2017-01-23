@@ -33,8 +33,272 @@
 #include <dart/gui/osg/osg.hpp>
 #include <dart/utils/utils.hpp>
 
+#include <memory>
+
 using namespace dart::dynamics;
 using namespace dart::simulation;
+
+const double DefaultAlpha = 0.3;
+const Eigen::Vector4d LeftColor = dart::Color::Blue(DefaultAlpha);
+const Eigen::Vector4d RightColor = dart::Color::Fuschia(DefaultAlpha);
+//const Eigen::Vector4d CopyRightColor = Eigen::Vector4d(1.0, 0.0, 0.15, DefaultAlpha);
+//const Eigen::Vector4d CopyRightColor = dart::Color::Orange(DefaultAlpha);
+const Eigen::Vector4d CopyRightColor = dart::Color::Green(DefaultAlpha);
+const Eigen::Vector4d SelectedColor = Eigen::Vector4d(1.0, 0.0, 0.0, DefaultAlpha);
+const Eigen::Vector4d MinimalColor = Eigen::Vector4d(1.0, 1.0, 0.0, 2*DefaultAlpha);
+//const Eigen::Vector4d MinimalColor = dart::Color::Orange(2*DefaultAlpha);
+
+const double JumpHeight = 0.1;
+
+const double AngleWeight = 1.0/(360*M_PI/180.0);
+double diff(const Eigen::Isometry3d& tf1, const Eigen::Isometry3d& tf2,
+            const double angleWeight = AngleWeight)
+{
+//  Eigen::Vector6d dx;
+//  dx.block<3,1>(3,0) = tf1.translation() - tf2.translation();
+
+//  Eigen::AngleAxisd aa(tf2.linear().transpose()*tf1.linear());
+//  dx.block<3,1>(0,0) = AngleWeight*aa.angle()*aa.axis();
+
+//  return dx.norm();
+
+
+  const double wR = angleWeight/(1+angleWeight);
+  const double wX = 1-wR;
+
+  const double X = (tf1.translation() - tf2.translation()).norm();
+
+  Eigen::AngleAxisd aa(tf2.linear().transpose()*tf1.linear());
+  const double R = std::abs(aa.angle());
+
+  return wX*X + wR*R;
+}
+
+Eigen::Isometry3d stepTowards(const Eigen::Isometry3d& target,
+                              const Eigen::Isometry3d& from,
+                              const double byNoMoreThan,
+                              const double angleWeight = AngleWeight)
+{
+  const double wR = angleWeight/(1+angleWeight);
+  const double wX = 1-wR;
+
+  const Eigen::Vector3d x = target.translation() - from.translation();
+  const double X = x.norm();
+  const Eigen::AngleAxisd aa(from.linear().transpose()*target.linear());
+  const double R = std::abs(aa.angle());
+
+  double cost = wX*X + wR*R;
+
+  if(cost > byNoMoreThan)
+  {
+    const double s = byNoMoreThan/cost;
+
+    const Eigen::Vector3d dx = s*x;
+    const double r = s*aa.angle();
+
+    Eigen::Isometry3d result = from;
+
+    result.rotate(Eigen::AngleAxisd(r, aa.axis()));
+    result.pretranslate(dx);
+
+    return result;
+  }
+
+  return target;
+}
+
+static void addBox(const SkeletonPtr& skel,
+                   Eigen::Vector3d lower,
+                   Eigen::Vector3d upper,
+                   const Eigen::Matrix3d& R = Eigen::Matrix3d::Identity(),
+                   const Eigen::Vector4d color = Eigen::Vector4d(0.0, 208.0, 255.0, 0.4*255.0)/255.0)
+{
+  const Eigen::Matrix3d Rinv = R.transpose();
+  lower = Rinv*lower;
+  upper = Rinv*upper;
+  const Eigen::Vector3d dim = upper - lower;
+
+  BodyNode* bn = skel->getBodyNode(0)->
+      createChildJointAndBodyNodePair<WeldJoint>().second;
+  bn->setName("component_"+std::to_string(skel->getNumBodyNodes()));
+  bn->getParentJoint()->setName(bn->getName());
+
+  BoxShapePtr shape = std::make_shared<BoxShape>(dim);
+  ShapeNode* node = bn->createShapeNodeWith<
+      VisualAspect, CollisionAspect, DynamicsAspect>(shape);
+  node->getVisualAspect()->setColor(color);
+  node->setRelativeTranslation(R*(dim/2.0 + lower));
+  node->setRelativeRotation(R);
+}
+
+SkeletonPtr getMinimalRobot(const SkeletonPtr& robot)
+{
+  SkeletonPtr minimal = robot->getBodyNode(0)->copyAs("minimal", false);
+
+  addBox(minimal,
+         Eigen::Vector3d(-0.1,  -0.086, 0.03),
+         Eigen::Vector3d( 0.06,  0.086, 0.25),
+         Eigen::Matrix3d::Identity(),
+         Eigen::Vector4d(1.0, 0.0, 0.0, 1.0));
+
+  for(size_t j=0; j < minimal->getNumBodyNodes(); ++j)
+  {
+    BodyNode* bn = minimal->getBodyNode(j);
+    for(size_t k=0; k < bn->getNumShapeNodes(); ++k)
+    {
+      ShapeNode* sn = bn->getShapeNode(k);
+      VisualAspect* visual = sn->getVisualAspect();
+      if(visual)
+        visual->setRGBA(MinimalColor);
+
+      MeshShapePtr shape = std::dynamic_pointer_cast<MeshShape>(sn->getShape());
+      if(shape)
+      {
+        shape->setColorMode(MeshShape::SHAPE_COLOR);
+      }
+    }
+  }
+
+  return minimal;
+}
+
+std::vector<dart::dynamics::SkeletonPtr> getFootprints()
+{
+  dart::dynamics::SkeletonPtr l_foot =
+      dart::dynamics::Skeleton::create("l_foot_print");
+  BodyNode* bn = l_foot->createJointAndBodyNodePair<FreeJoint>().second;
+  bn->setName("base"); bn->getParentJoint()->setName("base");
+
+  addBox(l_foot,
+         Eigen::Vector3d(-0.222, -0.072, -0.01),
+         Eigen::Vector3d(0.002, 0.079, 0.01),
+         Eigen::Matrix3d::Identity(),
+         dart::Color::Blue(0.7));
+
+  dart::dynamics::SkeletonPtr r_foot =
+      dart::dynamics::Skeleton::create("r_foot_print");
+  bn = r_foot->createJointAndBodyNodePair<FreeJoint>().second;
+  bn->setName("base"); bn->getParentJoint()->setName("base");
+
+  addBox(r_foot,
+         Eigen::Vector3d(-0.222, -0.079, -0.01),
+         Eigen::Vector3d(0.002, 0.072, 0.01),
+         Eigen::Matrix3d::Identity(),
+         dart::Color::Fuschia(0.7));
+
+  return {l_foot, r_foot};
+}
+
+struct Box
+{
+  bool left;
+
+  dart::dynamics::SimpleFramePtr node;
+
+  Box(const Eigen::Isometry3d& T = Eigen::Isometry3d::Identity())
+    : left(true),
+      node(nullptr)
+  {
+    // Do nothing
+  }
+};
+
+void printBox(const std::shared_ptr<Box>& box)
+{
+  Eigen::Vector3d scale = std::dynamic_pointer_cast<BoxShape>(
+        box->node->getShape())->getSize();
+  Eigen::Vector3d v = box->node->getRelativeTransform().translation();
+
+  std::cout << "ADD_BOX(";
+  for(size_t i=0; i < 3; ++i)
+    std::cout << v[i] << ", ";
+
+  for(size_t i=0; i < 3; ++i)
+    std::cout << scale[i] << ", ";
+
+  if(box->left)
+    std::cout << "1 ";
+  else
+    std::cout << "0 ";
+
+  std::cout << ");" << std::endl;
+}
+
+void printConfigs(const std::vector<Eigen::VectorXd>& Q)
+{
+  for(size_t i=0; i < Q.size(); ++i)
+  {
+    std::cout << "ADD_CONFIG(";
+    Eigen::VectorXd q = Q[i];
+    for(size_t j=0; j < q.size(); ++j)
+    {
+      std::cout << q[j];
+      if(j < q.size()-1)
+        std::cout << ", ";
+      else
+        std::cout << ");";
+    }
+    std::cout << std::endl;
+  }
+
+  std::cout << "-----------\n" << std::endl;
+}
+
+class Viewer : public dart::gui::osg::Viewer
+{
+public:
+
+  void setupCustomLights(size_t version = 1)
+  {
+    switchHeadlights(false);
+
+    mLight1->setAmbient( ::osg::Vec4(0.4,0.4,0.4,1.0));
+
+    const osg::Vec3 p1 = mUpwards+osg::Vec3(0, 1, 0);
+    const osg::Vec3 p2 = mUpwards+osg::Vec3(1, 0, 0);
+
+    if(1 == version)
+    {
+      mLight1->setPosition(osg::Vec4( p1[0], p1[1], p1[2], 0.0));
+      mLight2->setPosition(osg::Vec4(-p2[0], p2[1], p2[2], 0.0));
+    }
+    else if(2 == version)
+    {
+      mLight1->setPosition(osg::Vec4(p1[0], -p1[1], p1[2], 0.0));
+      mLight2->setPosition(osg::Vec4(p2[0],  p2[1], p2[2], 0.0));
+    }
+    else if(3 == version)
+    {
+      mLight1->setPosition(osg::Vec4(p1[0], p1[1], p1[2], 0.0));
+      mLight2->setPosition(osg::Vec4(p2[0], p2[1], p2[2], 0.0));
+    }
+    else if(4 == version)
+    {
+      mLight1->setPosition(osg::Vec4( p1[0], -p1[1], p1[2], 0.0));
+      mLight2->setPosition(osg::Vec4(-p2[0],  p2[1], p2[2], 0.0));
+    }
+    else if(5 == version)
+    {
+      mLight1->setPosition(osg::Vec4(-p2[0], p2[1], p2[2], 0.0));
+      mLight2->setPosition(osg::Vec4( p1[0], p1[1], p1[2], 0.0));
+    }
+    else if(6 == version)
+    {
+      mLight1->setPosition(osg::Vec4(p2[0],  p2[1], p2[2], 0.0));
+      mLight2->setPosition(osg::Vec4(p1[0], -p1[1], p1[2], 0.0));
+    }
+    else if(7 == version)
+    {
+      mLight1->setPosition(osg::Vec4(p2[0], p2[1], p2[2], 0.0));
+      mLight2->setPosition(osg::Vec4(p1[0], p1[1], p1[2], 0.0));
+    }
+    else if(8 == version)
+    {
+      mLight1->setPosition(osg::Vec4(-p2[0],  p2[1], p2[2], 0.0));
+      mLight2->setPosition(osg::Vec4( p1[0], -p1[1], p1[2], 0.0));
+    }
+  }
+};
 
 class RelaxedPosture : public dart::optimizer::Function
 {
@@ -700,6 +964,8 @@ protected:
 
 };
 
+class InputHandler;
+
 class TeleoperationWorld : public dart::gui::osg::WorldNode
 {
 public:
@@ -748,73 +1014,11 @@ public:
     }
   }
 
-  void customPreRefresh() override
-  {
-    if(mAnyMovement)
-    {
-      Eigen::Isometry3d old_tf = mHubo->getBodyNode(0)->getWorldTransform();
-      Eigen::Isometry3d new_tf = Eigen::Isometry3d::Identity();
-      Eigen::Vector3d forward = old_tf.linear().col(0);
-      forward[2] = 0.0;
-      if(forward.norm() > 1e-10)
-        forward.normalize();
-      else
-        forward.setZero();
-
-      Eigen::Vector3d left = old_tf.linear().col(1);
-      left[2] = 0.0;
-      if(left.norm() > 1e-10)
-        left.normalize();
-      else
-        left.setZero();
-
-      const Eigen::Vector3d& up = Eigen::Vector3d::UnitZ();
-
-      double linearStep = 0.01;
-      double elevationStep = 0.2*linearStep;
-      double rotationalStep = 2.0*M_PI/180.0;
-
-      if(mAmplifyMovement)
-      {
-        linearStep *= 2.0;
-        elevationStep *= 2.0;
-        rotationalStep *= 2.0;
-      }
-
-      if(mMoveComponents[MOVE_W])
-        new_tf.translate( linearStep*forward);
-
-      if(mMoveComponents[MOVE_S])
-        new_tf.translate(-linearStep*forward);
-
-      if(mMoveComponents[MOVE_A])
-        new_tf.translate( linearStep*left);
-
-      if(mMoveComponents[MOVE_D])
-        new_tf.translate(-linearStep*left);
-
-      if(mMoveComponents[MOVE_F])
-        new_tf.translate( elevationStep*up);
-
-      if(mMoveComponents[MOVE_Z])
-        new_tf.translate(-elevationStep*up);
-
-      if(mMoveComponents[MOVE_Q])
-        new_tf.rotate(Eigen::AngleAxisd( rotationalStep, up));
-
-      if(mMoveComponents[MOVE_E])
-        new_tf.rotate(Eigen::AngleAxisd(-rotationalStep, up));
-
-      new_tf.pretranslate(old_tf.translation());
-      new_tf.rotate(old_tf.rotation());
-
-      mHubo->getJoint(0)->setPositions(FreeJoint::convertToPositions(new_tf));
-    }
-
-    mHubo->getIK(true)->solve();
-  }
+  void customPreRefresh() override;
 
   bool mAmplifyMovement;
+
+  InputHandler* mInput;
 
 protected:
 
@@ -841,18 +1045,170 @@ class InputHandler : public ::osgGA::GUIEventHandler
 {
 public:
 
-  InputHandler(dart::gui::osg::Viewer* viewer, TeleoperationWorld* teleop,
+  InputHandler(Viewer* viewer, TeleoperationWorld* teleop,
                const SkeletonPtr& hubo, const WorldPtr& world)
     : mViewer(viewer),
       mTeleop(teleop),
       mHubo(hubo),
       mWorld(world)
   {
+    mTeleop->mInput = this;
     initialize();
+  }
+
+  std::shared_ptr<Box> createBox()
+  {
+    std::shared_ptr<Box> box = std::make_shared<Box>();
+    Eigen::Vector3d s(0.5*Eigen::Vector3d::Ones());
+    Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+    tf.translation()[2] += s[2]/2.0;
+    box->node = std::make_shared<SimpleFrame>(
+          mHubo->getEndEffector("l_foot"),
+          "box_"+std::to_string(numBoxes), tf);
+    ++numBoxes;
+
+    BoxShapePtr shape = std::make_shared<BoxShape>(s);
+    shape->addDataVariance(Shape::DYNAMIC_COLOR);
+    shape->addDataVariance(Shape::DYNAMIC_PRIMITIVE);
+    box->node->setShape(shape);
+    box->node->createVisualAspect();
+
+    boxes.push_back(box);
+
+    mWorld->addSimpleFrame(box->node);
+
+    mSelectedBox = boxes.size()-1;
+    selectBox();
+
+    return box;
+  }
+
+  void flipBox(std::shared_ptr<Box> box)
+  {
+    const Eigen::Vector3d v = box->node->getRelativeTransform().translation();
+    const Eigen::Vector3d s = std::dynamic_pointer_cast<BoxShape>(
+          box->node->getShape())->getSize();
+
+    ADD_BOX(v[0], v[1], v[2], s[0], s[1], s[2], box->left? 1 : 0, true);
+  }
+
+  void ADD_BOX(double v0, double v1, double v2,
+               double s0, double s1, double s2,
+               int l, bool flip = false)
+  {
+    std::shared_ptr<Box> box = createBox();
+    Eigen::Vector3d v(v0, v1, v2);
+    Eigen::Vector3d s(s0, s1, s2);
+    bool left = l!=0;
+
+    if(flip)
+    {
+      v[1] = -v[1];
+      left = !left;
+    }
+
+    std::dynamic_pointer_cast<BoxShape>(box->node->getShape())->setSize(s);
+
+    std::cout << v.transpose() << " : " << s.transpose() << std::endl;
+
+    Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+    tf.translation() = v;
+    box->node->setRelativeTransform(tf);
+
+    box->left = left;
+    if(left)
+      box->node->setParentFrame(mHubo->getEndEffector("l_foot"));
+    else
+      box->node->setParentFrame(mHubo->getEndEffector("r_foot"));
+
+    selectBox();
+  }
+
+  void ADD_CONFIG(std::vector<double>& X)
+  {
+    Eigen::VectorXd q(X.size());
+    for(size_t i=0; i < X.size(); ++i)
+      q[i] = X[i];
+
+    configs.push_back(q);
+  }
+
+  template<typename... R>
+  void ADD_CONFIG(std::vector<double>& X, double x, R... remainder)
+  {
+    X.push_back(x);
+    ADD_CONFIG(X, remainder...);
+  }
+
+  template<typename... R>
+  void ADD_CONFIG(double x, R... remainder)
+  {
+    std::vector<double> X;
+    ADD_CONFIG(X, x, remainder...);
+  }
+
+  void createInitialBoxes()
+  {
+//    ADD_BOX(-0.11, 0.005, 0.076, 0.225, 0.15, 0.175, 1 );
+//    ADD_BOX(-0.109144, -0.0590679, 0.337675, 0.35, 0.55, 0.35, 1 );
+
+    ADD_BOX(-0.11, 0.005, 0.076, 0.225, 0.15, 0.175, 1 );
+    ADD_BOX(-0.109144, 0.0103071, 0.337675, 0.5, 0.4, 0.35, 1 );
+    ADD_BOX(-0.15, 0.11, 0.813, 0.8, 0.6, 0.6, 1 );
+    ADD_BOX(-0.15, 0.01, 1.21087, 0.35, 0.4, 0.2, 1 );
+    ADD_BOX(-0.11, -0.005, 0.076, 0.225, 0.15, 0.175, 0 );
+    ADD_BOX(-0.109144, -0.0103071, 0.337675, 0.5, 0.4, 0.35, 0 );
+    ADD_BOX(-0.15, -0.11, 0.813, 0.8, 0.6, 0.6, 0 );
+    ADD_BOX(-0.15, -0.01, 1.21087, 0.35, 0.4, 0.2, 0 );
+
+
+//    ADD_CONFIG(-0.0064084, 0.0542555, 1.56454, 0.592375, -0.99157, 1.28162, 0.00726405, -0.0933735, -0.362946, 1.02419, -0.699833, 0.06266, 0.00723432, -0.09414, -0.393854, 1.06434, -0.709078, 0.0634271, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+//    ADD_CONFIG(-0.0064084, 0.0542555, 1.56454, 0.592375, -0.99157, 1.28162, 0.00726405, -0.0933735, -0.773723, 0.976543, -0.241411, 0.06266, 0.00723432, -0.09414, -0.393854, 1.06434, -0.709078, 0.0634271, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+//    ADD_CONFIG(-0.0064084, 0.0542555, 1.56454, 0.593812, -0.721574, 1.11362, 0.00649108, -0.113267, -0.614157, 1.77212, -1.19663, 0.0825683, 0.0075281, -0.0865599, -0.674375, 0.835819, -0.20001, 0.0558413, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+//    ADD_CONFIG(-0.0044694, 0.0539438, 1.49475, 0.629892, -0.508705, 0.97962, 0.0797254, -0.0266514, -0.511336, 0.772974, -0.297831, -0.0067189, 0.079756, -0.0258067, -0.667968, 1.59744, -0.965661, -0.00756413, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+//    ADD_CONFIG(-0.0044694, 0.0539438, 1.49475, 0.633645, -0.458847, 0.81562, 0.080138, -0.0152569, -0.876787, 1.66182, -0.821217, -0.0181209, 0.0799367, -0.0208173, -0.672125, 0.821822, -0.185886, -0.0125568, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
+//    ADD_CONFIG(0.412139, -0.411002, 1.56306, 0.626723, -0.258966, 0.62662, -0.0315267, 0.00263372, 0.0215828, 1.03206, -0.530868, -0.0106397, -0.0332993, 0.00570971, 0.0779193, 1.61739, -1.17253, -0.0141899, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+//    ADD_CONFIG(0.412139, -0.411002, 1.56306, 0.618416, -0.0191102, 0.38312, -0.0244701, -0.00961172, 0.273572, 1.78769, -1.53846, 0.00349342, -0.0249461, -0.00878562, 0.0923191, 1.42418, -0.993705, 0.00253996, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+//    ADD_CONFIG(0.412139, -0.411002, 1.56306, 0.617204, 0.0158689, 0.30512, -0.024206, -0.0100699, -0.0307712, 1.16854, -0.614962, 0.00402225, -0.0233843, -0.0114956, 0.0857103, 1.69058, -1.25347, 0.00566774, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+//    ADD_CONFIG(0.412139, -0.411002, 1.56306, 0.60959, 0.235737, 0.16112, -0.0153117, -0.0254986, 0.273068, 1.55512, -1.30523, 0.0218302, -0.0181967, -0.0204951, 0.17082, 1.07825, -0.72618, 0.016055, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+//    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.611088, 0.295718, 0.0821198, 0.0289223, -0.0014629, -0.555767, 0.822249, -0.313728, 0.00817425, 0.0287901, -0.00426044, -0.690165, 1.59398, -0.951061, 0.0109749, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+//    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.615209, 0.460667, -0.0778802, 0.0292997, 0.00651962, -0.622584, 1.6217, -1.04636, 0.000182819, 0.0292956, 0.00643169, -0.55191, 0.897004, -0.39234, 0.000270843, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+//    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.619205, 0.620617, -0.16388, 0.0296934, 0.014844, -0.72101, 1.03975, -0.365995, -0.00815082, 0.0297301, 0.0156205, -0.458176, 1.31034, -0.899413, -0.00892819, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+//    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.624574, 0.83555, -0.18888, 0.030262, 0.0268645, -0.385879, 1.13876, -0.800144, -0.0201848, 0.0302556, 0.0267303, -0.766229, 1.20074, -0.481777, -0.0200504, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+//    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.626322, 0.905528, -0.18888, 0.0304413, 0.0306547, -0.653296, 1.2189, -0.612867, -0.0239792, 0.0304351, 0.030523, -0.647355, 1.22068, -0.620596, -0.0238474, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
+
+
+    ADD_CONFIG(0, 0, 0, 0, 0, 0.76662, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(0, 0, 0, -1.7925, 0, 0.83037, 0, 0, -0.405784, 1.26095, -0.85517, 0, 0, 0, -0.93727, 1.12304, -0.18577, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(0.010739, 0.472984, -0.0166738, -1.7875, 0, 0.83037, 0.0116087, -0.0180401, -1.00013, 1.22387, -0.69667, 0.004299, 0.0115756, -0.0181049, -1.36142, 0.811991, 0.0764968, 0.00437179, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, -0.837609, -0.0146939, 0.73937, -0.0276086, 0.0191315, 0.213719, 1.09865, -0.877419, -0.00486763, -0.0275317, 0.0189661, -0.391096, 1.14419, -0.318148, -0.00468524, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(0.010739, 0.472984, -0.0166738, -0.467653, -0.0201153, 0.74137, 0.00722262, -0.0266093, -1.35091, 0.755238, 0.122637, 0.0139249, 0.0162932, -0.00888492, -0.92129, 1.20582, -0.757402, -0.00598482, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 0.301939, 0.0174184, 0.73937, -0.0375264, 0.0404603, -0.472735, 0.89778, 0.0101975, -0.0283876, -0.0226695, 0.00850125, -0.0205193, 1.20845, -0.753047, 0.0068538, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(0.010739, 0.472984, -0.0166738, 0.817198, -0.0396972, 0.74137, 0.0127696, -0.0157716, -0.797336, 1.14283, -0.818414, 0.00175075, 0.0116402, -0.0179786, -1.36284, 0.82949, 0.060416, 0.00422992, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 1.63641, 0.0550236, 0.73937, -0.0280297, 0.0200378, 0.0631171, 1.52229, -1.15045, -0.00586693, -0.0279275, 0.0198177, -0.648348, 1.56244, -0.479141, -0.00562427, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(-0.0884185, 0.467971, 0.394323, -1.76911, 0.00785536, 0.83037, -0.340548, 0.219028, -0.997312, 1.22497, -0.674541, -0.0508541, -0.311425, 0.21401, -1.65174, 1.07575, -0.320413, -0.0653585, -0.447719, -0.937051, 0.107684, -0.0416174, -1.54725, 0.361615, 0.0149998, -0.207424, 0, 0, 0, 0.711052, 0.00939222, -0.376081, -1.00428, -0.135502, -0.223307, -0.460984);
+    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, -0.837609, -0.0146939, 0.73937, -0.0312993, 0.0160104, 0.1628, 1.46851, -0.281912, -0.00588489, -0.0275317, 0.0189661, -0.391096, 1.14419, -0.318148, -0.00468524, 0, -0.191409, 0.0471485, -0.0162657, -1.13354, 0.0226592, -0.251753, 0.0284777, 0, 0, 0, 0.81341, -0.0948062, -0.114358, -1.33267, -0.139596, -0.441466, -0.160936);
+    ADD_CONFIG(0.010739, 0.472984, -0.0166738, -0.467653, -0.0201153, 0.74137, 0.00400309, -0.0234543, -1.57893, 0.879265, -0.102893, 0.0132982, 0.0162932, -0.00888492, -0.92129, 1.20582, -0.757402, -0.00598482, 0, 0.706595, 0.0974204, -0.242543, -0.640141, 0.336393, -0.14842, -0.0597675, 0, 0, 0, -0.423601, -0.147833, 0.0570435, -1.7182, -0.117669, -0.37894, 0.028999);
+    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 0.302958, -0.042573, 0.73937, -0.0308769, 0.0261635, -0.478209, 0.9838, -0.0705699, -0.0126216, -0.0173139, 0.0123333, 0.0841802, 1.5461, -0.341139, 0.00858068, 0, 1.32366, 0.102771, 0.278691, -1.12307, 0.0945863, 0.0673144, 0.112537, 0, 0, 0, -0.0338947, 0.0507568, -0.00493848, -1.39261, 0.0228408, -0.144186, 0.028243);
+//    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 0.301939, 0.0174184, 0.73937, -0.0375264, 0.0404603, -0.472735, 0.89778, 0.0101975, -0.0283876, -0.0173139, 0.0123333, 0.0841802, 1.5461, -0.341139, 0.00858068, 0, 1.32366, 0.102771, 0.278691, -1.12307, 0.0945863, 0.0673144, 0.112537, 0, 0, 0, -0.0338947, 0.0507568, -0.00493848, -1.39261, 0.0228408, -0.144186, 0.028243);
+    ADD_CONFIG(0.010739, 0.472984, -0.0166738, 0.817198, -0.0396972, 0.74137, 0.0127696, -0.0157716, -0.797336, 1.14283, -0.818414, 0.00175075, 0.0101865, -0.0163325, -1.6562, 1.03036, -0.384914, 0.00398978, 0, -0.801251, 0.246015, -0.00490418, -1.65162, -0.0548297, 0.0090178, 0.234999, 0, 0, 0, 0.761586, -0.125419, -0.00162068, -0.619121, -0.0270319, 0.136909, -0.138378);
+    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 1.63641, 0.0550236, 0.73937, -0.0306251, 0.0163461, 0.261575, 1.36128, -0.362954, -0.00532234, -0.0279275, 0.0198177, -0.648348, 1.56244, -0.479141, -0.00562427, 0, -0.279874, 0.222149, -0.0873567, -1.09222, 0.113565, -0.206902, 0.126148, 0, 0, 0, 1.36927, -0.00902004, -0.0218707, -1.22307, 0.177575, 0.161155, -0.250746);
+
+
+    mSelectedBox = -1;
+    selectBox();
   }
 
   void initialize()
   {
+    ds = 0.05;
+    dx = 0.01;
+    mSelectedBox = -1;
+    currentBox = nullptr;
+    currentDnD = nullptr;
+    numBoxes = 0;
+    mLighting = 1;
+
     mRestConfig = mHubo->getPositions();
 
     for(std::size_t i=0; i < mHubo->getNumEndEffectors(); ++i)
@@ -867,15 +1223,60 @@ public:
       }
     }
 
-    mPosture = std::dynamic_pointer_cast<RelaxedPosture>(
-          mHubo->getIK(true)->getObjective());
+//    mPosture = std::dynamic_pointer_cast<RelaxedPosture>(
+//          mHubo->getIK(true)->getObjective());
 
-    mBalance = std::dynamic_pointer_cast<dart::constraint::BalanceConstraint>(
-          mHubo->getIK(true)->getProblem()->getEqConstraint(1));
+//    mBalance = std::dynamic_pointer_cast<dart::constraint::BalanceConstraint>(
+//          mHubo->getIK(true)->getProblem()->getEqConstraint(1));
 
     mOptimizationKey = 'r';
 
     mMoveComponents.resize(TeleoperationWorld::NUM_MOVE, false);
+
+    createInitialBoxes();
+    mViewer->getCamera()->getViewMatrixAsLookAt(eye, center, up);
+
+    c_index = -1;
+
+    minimals = getFootprints();
+    minimals.push_back(getMinimalRobot(mHubo));
+  }
+
+  void makeMinimalCopyWithFeet()
+  {
+    std::vector<SkeletonPtr> copies;
+
+    SkeletonPtr lf = minimals[0]->clone("lf_#"+std::to_string(minimalCopies.size()));
+    lf->setPositions(FreeJoint::convertToPositions(mHubo->getEndEffector("l_foot")->getWorldTransform()));
+    copies.push_back(lf);
+
+    SkeletonPtr rf = minimals[1]->clone("rf_#"+std::to_string(minimalCopies.size()));
+    rf->setPositions(FreeJoint::convertToPositions(mHubo->getEndEffector("r_foot")->getWorldTransform()));
+    copies.push_back(rf);
+
+//    SkeletonPtr mc = minimals[2]->clone("mc_#"+std::to_string(minimalCopies.size()));
+    SkeletonPtr mc = getMinimalRobot(mHubo);
+    mc->setName("mc_#"+std::to_string(minimalCopies.size()));
+    mc->setPositions(mHubo->getJoint(0)->getPositions());
+    copies.push_back(mc);
+
+    for(size_t i=0; i < copies.size(); ++i)
+      mWorld->addSkeleton(copies[i]);
+
+    minimalCopies.push_back(copies);
+  }
+
+  void makeMinimalCopy(const Eigen::Isometry3d tf)
+  {
+    std::vector<SkeletonPtr> copies;
+//    SkeletonPtr mc = minimals[2]->clone("mc_#"+std::to_string(minimalCopies.size()));
+    SkeletonPtr mc = getMinimalRobot(mHubo);
+    mc->setPositions(FreeJoint::convertToPositions(tf));
+    copies.push_back(mc);
+    minimalCopies.push_back(copies);
+
+    mc->setName("mc_#"+std::to_string(minimalCopies.size()));
+    mWorld->addSkeleton(mc);
   }
 
   virtual bool handle(const ::osgGA::GUIEventAdapter& ea,
@@ -888,22 +1289,538 @@ public:
 
     if( ::osgGA::GUIEventAdapter::KEYDOWN == ea.getEventType() )
     {
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Right)
+      {
+        ++mLighting;
+        if(mLighting > 8)
+          mLighting = 8;
+
+        mViewer->setupCustomLights(mLighting);
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Left)
+      {
+        --mLighting;
+        if(mLighting == 0)
+          mLighting = 1;
+
+        mViewer->setupCustomLights(mLighting);
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Up )
+      {
+        selectNextBox();
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Down )
+      {
+        selectPrevBox();
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_BackSpace )
+      {
+        mSelectedBox = -1;
+        selectBox();
+        return true;
+      }
+
+      if( ea.getKey() == osgGA::GUIEventAdapter::KEY_Delete )
+      {
+        if(mSelectedBox < 0)
+          return true;
+
+        if(boxes.empty())
+        {
+          mSelectedBox = -1;
+          selectBox();
+          return true;
+        }
+
+        mTeleop->getWorld()->removeSimpleFrame(currentBox->node);
+        boxes.erase(boxes.begin()+mSelectedBox);
+        --mSelectedBox;
+
+        selectBox();
+      }
+
       if( ea.getKey() == 'p' )
       {
-        for(std::size_t i=0; i < mHubo->getNumDofs(); ++i)
-          std::cout << mHubo->getDof(i)->getName() << ": "
-                    << mHubo->getDof(i)->getPosition() << std::endl;
+//        for(std::size_t i=0; i < mHubo->getNumDofs(); ++i)
+//          std::cout << mHubo->getDof(i)->getName() << ": "
+//                    << mHubo->getDof(i)->getPosition() << std::endl;
+//        return true;
+
+
+//        for(size_t i=0; i < boxes.size(); ++i)
+//          printBox(boxes[i]);
+//        std::cout << " ---- " << std::endl;
+
+        printConfigs(configs);
+
         return true;
       }
 
       if( ea.getKey() == 't' )
       {
         // Reset all the positions except for x, y, and yaw
-        for(std::size_t i=0; i < mHubo->getNumDofs(); ++i)
+//        for(std::size_t i=0; i < mHubo->getNumDofs(); ++i)
+//        {
+//          if( i < 2 || 4 < i )
+//            mHubo->getDof(i)->setPosition(mRestConfig[i]);
+//        }
+
+        if(!currentBox)
+          return true;
+
+        Eigen::Isometry3d tf = currentBox->node->getRelativeTransform();
+        tf.linear() = Eigen::Matrix3d::Identity();
+        currentBox->node->setRelativeTransform(tf);
+
+        return true;
+      }
+
+      if( ea.getKey() == 'y' )
+      {
+        mViewer->getCamera()->getViewMatrixAsLookAt(eye, center, up);
+        return true;
+      }
+
+      if( ea.getKey() == 'Y' )
+      {
+        mViewer->getCameraManipulator()->setHomePosition(eye, center, up);
+        mViewer->setCameraManipulator(mViewer->getCameraManipulator());
+        return true;
+      }
+
+      if( ea.getKey() == 'u' )
+      {
+        configs.push_back(mHubo->getPositions());
+        printConfigs(configs);
+
+        std::cout << "Existing configs: " << configs.size() << std::endl;
+
+        return true;
+      }
+
+      if( ea.getKey() == 'U' )
+      {
+        if(!configs.empty())
+          configs.pop_back();
+
+        std::cout << "Remaining configs: " << configs.size() << std::endl;
+
+        return true;
+      }
+
+      if( ea.getKey() == 'h' )
+      {
+        ++c_index;
+        if(c_index >= configs.size())
         {
-          if( i < 2 || 4 < i )
-            mHubo->getDof(i)->setPosition(mRestConfig[i]);
+          if(configs.empty())
+          {
+            c_index = -1;
+            return true;
+          }
+
+          c_index = 0;
         }
+
+        mHubo->setPositions(configs[c_index]);
+        return true;
+      }
+
+      if( ea.getKey() == 'H' )
+      {
+        --c_index;
+        if(c_index < 0)
+        {
+          if(configs.empty())
+          {
+            c_index = -1;
+            return true;
+          }
+
+          c_index = configs.size()-1;
+        }
+
+        mHubo->setPositions(configs[c_index]);
+        return true;
+      }
+
+      if( ea.getKey() == '-' )
+      {
+        ds /= 2.0;
+        return true;
+      }
+
+      if( ea.getKey() == '=' )
+      {
+        ds *= 2.0;
+        return true;
+      }
+
+      if( ea.getKey() == '_' )
+      {
+        dx /= 2.0;
+        return true;
+      }
+
+      if( ea.getKey() == '+' )
+      {
+        dx *= 2.0;
+        return true;
+      }
+
+      if( ea.getKey() == '[' )
+      {
+        setScale(0, -ds);
+        return true;
+      }
+
+      if( ea.getKey() == ']' )
+      {
+        setScale(0, ds);
+        return true;
+      }
+
+      if( ea.getKey() == ';' )
+      {
+        setScale(1, -ds);
+        return true;
+      }
+
+      if( ea.getKey() == '\'' )
+      {
+        setScale(1, ds);
+        return true;
+      }
+
+      if( ea.getKey() == '.' )
+      {
+        setScale(2, -ds);
+        return true;
+      }
+
+      if( ea.getKey() == '/' )
+      {
+        setScale(2, ds);
+        return true;
+      }
+
+//      if( ea.getKey() == 'm' )
+//      {
+//        createBox();
+//        return true;
+//      }
+
+      if( ea.getKey() == 'm' )
+      {
+        jumpConfigs.push_back(mHubo->getPositions());
+        return true;
+      }
+
+      if( ea.getKey() == 'M' )
+      {
+        jumpConfigs.clear();
+        return true;
+      }
+
+      if( ea.getKey() == 'n' )
+      {
+        const size_t b = boxes.size();
+        for(size_t i=0; i < b; ++i)
+          flipBox(boxes[i]);
+        std::cout << " ---- " << std::endl;
+
+        return true;
+      }
+
+      if( ea.getKey() == 'l' )
+      {
+        if(!currentBox)
+          return true;
+
+        currentBox->left = !currentBox->left;
+        Eigen::Isometry3d tf = currentBox->node->getWorldTransform();
+
+        if(currentBox->left)
+        {
+          currentBox->node->setParentFrame(mHubo->getEndEffector("l_foot"));
+          currentBox->node->setTransform(tf);
+        }
+        else
+        {
+          currentBox->node->setParentFrame(mHubo->getEndEffector("r_foot"));
+          currentBox->node->setTransform(tf);
+        }
+
+
+        return true;
+      }
+
+      if( ea.getKey() == 'j' )
+      {
+        std::vector<SimpleFramePtr> copies;
+        for(size_t i=0; i < boxes.size(); ++i)
+        {
+          if(!boxes[i]->left)
+            continue;
+
+          SimpleFramePtr copy = boxes[i]->node->clone();
+//          copy->getVisualAspect()->setAlpha(DefaultAlpha + 0.4*(leftCopies.size()+1));
+          copy->getVisualAspect()->setRGBA(CopyRightColor);
+          copies.push_back(copy);
+          mWorld->addSimpleFrame(copy);
+        }
+
+        leftCopies.push_back(copies);
+
+        return true;
+      }
+
+      if( ea.getKey() == 'J' )
+      {
+        if(leftCopies.empty())
+          return true;
+
+        const std::vector<SimpleFramePtr>& last = leftCopies.back();
+        for(size_t i=0; i < last.size(); ++i)
+          mWorld->removeSimpleFrame(last[i]);
+
+        leftCopies.pop_back();
+        return true;
+      }
+
+      if( ea.getKey() == 'k' )
+      {
+        std::vector<SimpleFramePtr> copies;
+        for(size_t i=0; i < boxes.size(); ++i)
+        {
+          if(boxes[i]->left)
+            continue;
+
+          SimpleFramePtr copy = boxes[i]->node->clone();
+//          copy->getVisualAspect()->setAlpha(DefaultAlpha + 0.4*rightCopies.size());
+          copy->getVisualAspect()->setRGBA(CopyRightColor);
+          copies.push_back(copy);
+          mWorld->addSimpleFrame(copy);
+        }
+
+        rightCopies.push_back(copies);
+      }
+
+      if( ea.getKey() == 'K' )
+      {
+        if(rightCopies.empty())
+          return true;
+
+        const std::vector<SimpleFramePtr>& last = rightCopies.back();
+        for(size_t i=0; i < last.size(); ++i)
+          mWorld->removeSimpleFrame(last[i]);
+
+        rightCopies.pop_back();
+        return true;
+      }
+
+      if( ea.getKey() == '`' )
+      {
+        for(size_t i=0; i < boxes.size(); ++i)
+        {
+          mWorld->removeSimpleFrame(boxes[i]->node);
+          boxes[i]->node->setParentFrame(Frame::World());
+        }
+
+        return true;
+      }
+
+      if( ea.getKey() == '~' )
+      {
+        for(size_t i=0; i < boxes.size(); ++i)
+        {
+          mWorld->addSimpleFrame(boxes[i]->node);
+          if(boxes[i]->left)
+            boxes[i]->node->setParentFrame(mHubo->getEndEffector("l_foot"));
+          else
+            boxes[i]->node->setParentFrame(mHubo->getEndEffector("r_foot"));
+        }
+
+        return true;
+      }
+
+      if( ea.getKey() == 'v' )
+      {
+        for(size_t i=0; i < rightCopies.size(); ++i)
+        {
+          const std::vector<SimpleFramePtr>& copies = rightCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->addSimpleFrame(copies[j]);
+        }
+
+        for(size_t i=0; i < leftCopies.size(); ++i)
+        {
+          const std::vector<SimpleFramePtr>& copies = leftCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->addSimpleFrame(copies[j]);
+        }
+
+        return true;
+      }
+
+      if( ea.getKey() == 'V' )
+      {
+        for(size_t i=0; i < rightCopies.size(); ++i)
+        {
+          const std::vector<SimpleFramePtr>& copies = rightCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->removeSimpleFrame(copies[j]);
+        }
+
+        for(size_t i=0; i < leftCopies.size(); ++i)
+        {
+          const std::vector<SimpleFramePtr>& copies = leftCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->removeSimpleFrame(copies[j]);
+        }
+
+        return true;
+      }
+
+      if( ea.getKey() == 'g' )
+      {
+        if(jumpConfigs.size() < 2)
+        {
+          std::cout << "Not enough jump configs!" << std::endl;
+          return true;
+        }
+
+        mHubo->setPositions(jumpConfigs[0]);
+        const Eigen::Isometry3d tf0 = mHubo->getBodyNode(0)->getWorldTransform();
+        mHubo->setPositions(jumpConfigs[1]);
+        const Eigen::Isometry3d tf1 = mHubo->getBodyNode(0)->getWorldTransform();
+
+        const double rho = 1e-2;
+        const Eigen::Vector2d x0 = tf0.translation().block<2,1>(0,0);
+        const double z0 = tf0.translation()[2];
+        const Eigen::Vector2d x1 = tf1.translation().block<2,1>(0,0);
+        const double z1 = tf1.translation()[2];
+        const double D = (x1-x0).norm();
+
+        if(z1-z0 >= JumpHeight)
+        {
+          std::cout << "TOO HIGH! " << z1-z0 << std::endl;
+          return true;
+        }
+
+        if(D < 1e-8)
+        {
+          std::cout << "Too short! " << D << std::endl;
+          return true;
+        }
+
+        Eigen::AngleAxisd aa(tf0.linear().transpose()*tf1.linear());
+
+        const size_t samples = D/rho;
+
+        const double da = aa.angle()/(double)(samples);
+
+        for(size_t i=0; i < samples; ++i)
+        {
+          const double d = i*rho;
+//          std::cout << "d: " << d << std::endl;
+          const double angle = i*da;
+
+          const double h = z0 + JumpHeight;
+          const double c = z0;
+          const double alpha = 1.0/(4*(z0-h));
+          const double beta = 1.0/D;
+          const double gamma = z0 - z1;
+
+          const double Det = pow(beta,2)-4*alpha*gamma;
+          if(Det < 0)
+          {
+            std::cout << "z0: " << z0 << " | z1: " << z1 << " | h: " << h
+                      << " | alpha: " << alpha << " | beta: " << beta
+                      << " | gamma: " << gamma << std::endl;
+
+            std::cout << "Invalid Det: " << Det << std::endl;
+            return true;
+          }
+
+          const double b = (-beta - sqrt(Det))/(2*alpha);
+//          const double b = (-beta + sqrt(pow(beta,2)-4*alpha*gamma))/(2*alpha);
+          const double a = (z1-z0-b*D)/pow(D,2);
+
+          const double z = a*pow(d,2) + b*d + c;
+
+          const Eigen::Vector2d x = (x1-x0)*(double)(i)/(double)(samples) + x0;
+          Eigen::Isometry3d tf(tf0);
+          tf.translation().block<2,1>(0,0) = x;
+          tf.translation()[2] = z;
+          tf.rotate(Eigen::AngleAxisd(angle, aa.axis()));
+
+          std::cout << "a: " << a << " | b: " << b << " | c: " << c << " | " << "d: "
+                    << d << " | z: " << z << std::endl;
+//          std::cout << "angle: " << angle << " | " << aa.axis().transpose() << std::endl;
+
+          makeMinimalCopy(tf);
+        }
+
+
+        return true;
+      }
+
+      if( ea.getKey() == 'b' )
+      {
+        if(minimalSweep.empty())
+        {
+//          makeMinimalCopyWithFeet();
+          return true;
+        }
+
+        const double rho = 1e-2;
+        Eigen::Isometry3d tf = minimalSweep.front();
+        makeMinimalCopy(tf);
+        for(size_t i=1; i < minimalSweep.size(); ++i)
+        {
+          Eigen::Isometry3d next_tf = minimalSweep[i];
+          while(diff(next_tf, tf) > 1e-8)
+          {
+            tf = stepTowards(next_tf, tf, rho);
+            makeMinimalCopy(tf);
+          }
+        }
+
+        return true;
+      }
+
+      if( ea.getKey() == 'B' )
+      {
+        for(size_t i=0; i < minimalCopies.size(); ++i)
+        {
+          const std::vector<SkeletonPtr>& copies = minimalCopies[i];
+          for(size_t j=0; j < copies.size(); ++j)
+            mWorld->removeSkeleton(copies[j]);
+        }
+
+        minimalCopies.clear();
+        return true;
+      }
+
+      if( ea.getKey() == 'i' )
+      {
+//        makeMinimalCopyWithFeet();
+        minimalSweep.push_back(mHubo->getBodyNode(0)->getWorldTransform());
+        return true;
+      }
+
+      if( ea.getKey() == 'I' )
+      {
+        minimalSweep.pop_back();
         return true;
       }
 
@@ -920,6 +1837,7 @@ public:
 
             ik->getErrorMethod().setBounds(mDefaultBounds[index]);
             ik->getTarget()->setRelativeTransform(mDefaultTargetTf[index]);
+
             mWorld->removeSimpleFrame(ik->getTarget());
           }
           else if(ik)
@@ -930,6 +1848,7 @@ public:
             // bounds
             ik->getErrorMethod().setBounds();
             ik->getTarget()->setTransform(ee->getTransform());
+
             mWorld->addSimpleFrame(ik->getTarget());
           }
         }
@@ -1029,9 +1948,76 @@ public:
     return false;
   }
 
-protected:
+  void setScale(size_t id, double x)
+  {
+    if(!currentBox)
+      return;
 
-  dart::gui::osg::Viewer* mViewer;
+    Eigen::Vector3d scale = std::dynamic_pointer_cast<BoxShape>(
+          currentBox->node->getShape())->getSize();
+    scale[id] += x;
+
+    if(scale[id] <= 0)
+      return;
+
+    std::dynamic_pointer_cast<BoxShape>(currentBox->node->getShape())->
+        setSize(scale);
+  }
+
+  void selectBox()
+  {
+    currentBox = nullptr;
+    if(currentDnD)
+    {
+      mViewer->disableDragAndDrop(currentDnD);
+      currentDnD = nullptr;
+    }
+
+    for(size_t i=0; i < boxes.size(); ++i)
+    {
+      SimpleFramePtr sn = boxes[i]->node;
+      VisualAspect* visual = sn->getVisualAspect();
+      if(boxes[i]->left)
+        visual->setColor(LeftColor);
+      else
+        visual->setColor(RightColor);
+    }
+
+    if(mSelectedBox >= 0)
+    {
+      currentBox = boxes[mSelectedBox];
+      currentBox->node->getVisualAspect()->setColor(SelectedColor);
+      currentDnD = mViewer->enableDragAndDrop(currentBox->node.get());
+      currentDnD->setRotationOption(dart::gui::osg::DragAndDrop::RotationOption::ALWAYS_OFF);
+    }
+  }
+
+  void selectNextBox()
+  {
+    ++mSelectedBox;
+    if(mSelectedBox >= boxes.size())
+    {
+      if(boxes.empty())
+        mSelectedBox = -1;
+      else
+        mSelectedBox = 0;
+    }
+
+    selectBox();
+  }
+
+  void selectPrevBox()
+  {
+    --mSelectedBox;
+    if(mSelectedBox < 0)
+      mSelectedBox = boxes.size()-1;
+
+    selectBox();
+  }
+
+//protected:
+
+  Viewer* mViewer;
 
   TeleoperationWorld* mTeleop;
 
@@ -1056,7 +2042,116 @@ protected:
   char mOptimizationKey;
 
   std::vector<bool> mMoveComponents;
+
+  size_t mLighting;
+
+  int mSelectedBox;
+
+  std::vector<std::shared_ptr<Box>> boxes;
+
+  std::vector<std::vector<SimpleFramePtr>> leftCopies;
+  std::vector<std::vector<SimpleFramePtr>> rightCopies;
+  std::vector<std::vector<SkeletonPtr>> minimalCopies;
+  std::vector<Eigen::Isometry3d> minimalSweep;
+
+  std::vector<SkeletonPtr> minimals;
+
+  std::shared_ptr<Box> currentBox;
+  dart::gui::osg::SimpleFrameDnD* currentDnD;
+
+  size_t numBoxes;
+
+  double ds;
+  double dx;
+
+  ::osg::Vec3 eye, center, up;
+
+  std::vector<Eigen::VectorXd> configs;
+  std::vector<Eigen::VectorXd> jumpConfigs;
+  int c_index;
 };
+
+
+void TeleoperationWorld::customPreRefresh()
+{
+  if(mAnyMovement)
+  {
+    Eigen::Isometry3d old_tf;
+
+    if(mInput->currentBox)
+      old_tf = mInput->currentBox->node->getWorldTransform();
+    else
+      old_tf = mHubo->getBodyNode(0)->getWorldTransform();
+
+    Eigen::Isometry3d new_tf = Eigen::Isometry3d::Identity();
+    Eigen::Vector3d forward = old_tf.linear().col(0);
+    forward[2] = 0.0;
+    if(forward.norm() > 1e-10)
+      forward.normalize();
+    else
+      forward.setZero();
+
+    Eigen::Vector3d left = old_tf.linear().col(1);
+    left[2] = 0.0;
+    if(left.norm() > 1e-10)
+      left.normalize();
+    else
+      left.setZero();
+
+    const Eigen::Vector3d& up = Eigen::Vector3d::UnitZ();
+
+    double linearStep = mInput->dx;
+    double elevationStep = 0.2*linearStep;
+    double rotationalStep = 2.0*M_PI/180.0/0.01*linearStep;
+
+    if(mAmplifyMovement)
+    {
+      linearStep *= 2.0;
+      elevationStep *= 2.0;
+      rotationalStep *= 2.0;
+    }
+
+    if(mMoveComponents[MOVE_W])
+      new_tf.translate( linearStep*forward);
+
+    if(mMoveComponents[MOVE_S])
+      new_tf.translate(-linearStep*forward);
+
+    if(mMoveComponents[MOVE_A])
+      new_tf.translate( linearStep*left);
+
+    if(mMoveComponents[MOVE_D])
+      new_tf.translate(-linearStep*left);
+
+    if(mMoveComponents[MOVE_F])
+      new_tf.translate( elevationStep*up);
+
+    if(mMoveComponents[MOVE_Z])
+      new_tf.translate(-elevationStep*up);
+
+    if(mMoveComponents[MOVE_Q])
+      new_tf.rotate(Eigen::AngleAxisd( rotationalStep, up));
+
+    if(mMoveComponents[MOVE_E])
+      new_tf.rotate(Eigen::AngleAxisd(-rotationalStep, up));
+
+    new_tf.pretranslate(old_tf.translation());
+    new_tf.rotate(old_tf.rotation());
+
+
+    if(mInput->currentBox)
+    {
+      mInput->currentBox->node->setTransform(new_tf);
+    }
+    else
+    {
+      mHubo->getJoint(0)->setPositions(FreeJoint::convertToPositions(new_tf));
+    }
+  }
+
+  mHubo->getIK(true)->solve();
+}
+
 
 
 SkeletonPtr createGround()
@@ -1206,11 +2301,11 @@ void setupEndEffectors(const SkeletonPtr& hubo)
   double ground_dist = 0.01;
   tf_foot.translation() = Eigen::Vector3d(0.14, 0.0, -0.136+ground_dist);
 
-  linearBounds[2] = 1e-8;
+//  linearBounds[2] = 1e-8;
   Eigen::Vector3d ground_offset = ground_dist * Eigen::Vector3d::UnitZ();
 
-  angularBounds[0] = 1e-8;
-  angularBounds[1] = 1e-8;
+//  angularBounds[0] = 1e-8;
+//  angularBounds[1] = 1e-8;
 
   EndEffector* l_foot = hubo->getBodyNode("Body_LAR")->
       createEndEffector("l_foot");
@@ -1351,17 +2446,17 @@ void setupWholeBodySolver(const SkeletonPtr& hubo)
   upper_posture[1] =  0.50;
   upper_posture[5] =  0.95;
 
-  std::shared_ptr<RelaxedPosture> objective = std::make_shared<RelaxedPosture>(
-        hubo->getPositions(), lower_posture, upper_posture, weights);
+//  std::shared_ptr<RelaxedPosture> objective = std::make_shared<RelaxedPosture>(
+//        hubo->getPositions(), lower_posture, upper_posture, weights);
 
-  hubo->getIK()->setObjective(objective);
+//  hubo->getIK()->setObjective(objective);
 
-  std::shared_ptr<dart::constraint::BalanceConstraint> balance =
-      std::make_shared<dart::constraint::BalanceConstraint>(hubo->getIK());
-  hubo->getIK()->getProblem()->addEqConstraint(balance);
+//  std::shared_ptr<dart::constraint::BalanceConstraint> balance =
+//      std::make_shared<dart::constraint::BalanceConstraint>(hubo->getIK());
+//  hubo->getIK()->getProblem()->addEqConstraint(balance);
 
-  balance->setErrorMethod(dart::constraint::BalanceConstraint::FROM_CENTROID);
-  balance->setBalanceMethod(dart::constraint::BalanceConstraint::SHIFT_SUPPORT);
+//  balance->setErrorMethod(dart::constraint::BalanceConstraint::FROM_CENTROID);
+//  balance->setBalanceMethod(dart::constraint::BalanceConstraint::SHIFT_SUPPORT);
 
   solver->setNumMaxIterations(5);
 }
@@ -1377,17 +2472,37 @@ int main()
   Eigen::VectorXd positions = hubo->getPositions();
   // We make a clone to test whether the cloned version behaves the exact same
   // as the original version.
-  hubo = hubo->clone("hubo_copy");
+//  hubo = hubo->clone("hubo_copy");
   hubo->setPositions(positions);
 
   world->addSkeleton(hubo);
-  world->addSkeleton(createGround());
+//  world->addSkeleton(createGround());
+
+
+  dart::dynamics::SkeletonPtr env = Skeleton::create("scene");
+  dart::dynamics::BodyNode* bn = env->createJointAndBodyNodePair<
+      dart::dynamics::WeldJoint>().second;
+
+//  const std::string path = "/home/grey/projects/posgraph/data/models/UnevenEnvObj/";
+//  const std::string file = path+"UnevenEnv.obj";
+  const std::string path = "/home/grey/projects/posgraph/data/models/DoubleJumpEnvObj/";
+  const std::string file = path+"DoubleJumpEnv.obj";
+  dart::common::ResourceRetrieverPtr relative =
+      std::make_shared<dart::common::RelativeResourceRetriever>(path);
+  const aiScene* scene = dart::dynamics::MeshShape::loadMesh(file, relative);
+  dart::dynamics::MeshShapePtr mesh = std::make_shared<MeshShape>(
+        0.0254*Eigen::Vector3d::Ones(), scene, file);
+  bn->createShapeNodeWith<dart::dynamics::VisualAspect,
+                          dart::dynamics::CollisionAspect>(mesh);
+  world->addSkeleton(env);
+
 
   setupWholeBodySolver(hubo);
 
   ::osg::ref_ptr<TeleoperationWorld> node = new TeleoperationWorld(world, hubo);
 
-  dart::gui::osg::Viewer viewer;
+  Viewer viewer;
+//  viewer.getCamera()->setClearColor(osg::Vec4(1.0, 1.0, 1.0, 1.0));
   viewer.allowSimulation(false);
   viewer.addWorldNode(node);
 
@@ -1395,9 +2510,9 @@ int main()
 
   viewer.addEventHandler(new InputHandler(&viewer, node, hubo, world));
 
-  double display_elevation = 0.05;
-  viewer.addAttachment(new dart::gui::osg::SupportPolygonVisual(
-                         hubo, display_elevation));
+//  double display_elevation = 0.05;
+//  viewer.addAttachment(new dart::gui::osg::SupportPolygonVisual(
+//                         hubo, display_elevation));
 
   std::cout << viewer.getInstructions() << std::endl;
 
