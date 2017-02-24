@@ -240,6 +240,7 @@ void MeshShapeNode::extractData(bool firstTime)
 
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_EMISSIVE, &c)==AI_SUCCESS)
       {
+        std::cout << "got emissive: " << toText(c) << std::endl;
         material->setEmission(::osg::Material::FRONT_AND_BACK,
                               ::osg::Vec4(c.r, c.g, c.b, c.a));
       }
@@ -428,7 +429,7 @@ MeshShapeGeode::MeshShapeGeode(dart::dynamics::MeshShape* shape,
 {
   getOrCreateStateSet()->setMode(GL_BLEND, ::osg::StateAttribute::ON);
   getOrCreateStateSet()->setAttributeAndModes(new ::osg::CullFace(::osg::CullFace::BACK));
-//  getOrCreateStateSet()->setRenderingHint(::osg::StateSet::TRANSPARENT_BIN);
+  getOrCreateStateSet()->setRenderingHint(::osg::StateSet::TRANSPARENT_BIN);
   extractData(true);
 }
 
@@ -704,7 +705,6 @@ void MeshShapeGeometry::extractData(bool firstTime)
             const aiVector3D& t = aiTexCoords[i];
             (*texture)[i] = ::osg::Vec2(t.x, t.y);
           }
-
 
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
