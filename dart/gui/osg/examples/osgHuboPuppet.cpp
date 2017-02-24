@@ -38,6 +38,24 @@
 using namespace dart::dynamics;
 using namespace dart::simulation;
 
+const double DefaultFloorThickness = 0.5;
+const double DefaultWallHeight = 1.4;
+const double DefaultCeilHeight = 0.8;
+const double DefaultWallWidth = 0.05;
+const double DefaultBarRadius = 0.05/2.0;
+const double DefaultTableHeight = 0.55;
+const double DefaultIBeamHeight = 0.20;
+const double DefaultIBeamWidth = 0.15;
+const double DefaultIBeamThickness = 0.02;
+const Eigen::Vector4d DefaultWallColor = Eigen::Vector4d(238.0, 238.0, 224.0, 255.0)/255.0;
+const Eigen::Vector4d DefaultCeilColor = Eigen::Vector4d(238.0, 238.0, 224.0, 150.0)/255.0;
+const Eigen::Vector4d DefaultBarColor = Eigen::Vector4d(220.0, 220.0, 220.0, 255.0)/255.0;
+const Eigen::Vector4d DefaultFloorColor = Eigen::Vector4d(112.0, 128.0, 134.0, 255.0)/255.0;
+const Eigen::Vector4d DefaultBrickColor = Eigen::Vector4d(178.0, 34.0, 34.0, 255.0)/255.0;
+//const Eigen::Vector4d DefaultIBeamColor = Eigen::Vector4d(0x91, 0x2C, 0x00, 255.0)/255.0;
+const Eigen::Vector4d DefaultIBeamColor = Eigen::Vector4d(41, 232, 128, 255.0)/255.0;
+
+
 const double DefaultAlpha = 0.3;
 const Eigen::Vector4d LeftColor = dart::Color::Blue(DefaultAlpha);
 const Eigen::Vector4d RightColor = dart::Color::Fuschia(DefaultAlpha);
@@ -49,6 +67,45 @@ const Eigen::Vector4d MinimalColor = Eigen::Vector4d(1.0, 1.0, 0.0, 2*DefaultAlp
 //const Eigen::Vector4d MinimalColor = dart::Color::Orange(2*DefaultAlpha);
 
 const double JumpHeight = 0.1;
+
+inline Eigen::AngleAxisd findRotation(
+    const Eigen::Vector3d& x1, const Eigen::Vector3d& x0)
+{
+  Eigen::Vector3d N = x1.cross(x0);
+  double s = N.norm();
+  double theta = asin(s);
+  // Deal with numerical imprecision issues
+  if(s < -1.1 || 1.1 < s)
+  {
+    std::cout << "[findRotation] Strange value for s: " << s
+              << " | Results in theta: " << theta << std::endl;
+    return Eigen::AngleAxisd(0, Eigen::Vector3d::UnitZ());
+  }
+  else if(1.0 <= s)
+  {
+    theta = M_PI/2.0;
+  }
+  else if(s <= -1.0)
+  {
+    theta = -M_PI/2.0;
+  }
+  else if(std::abs(s) < 1e-10)
+  {
+    return Eigen::AngleAxisd(0, Eigen::Vector3d::UnitZ());
+  }
+
+  N.normalize();
+
+  const double wrap = x1.dot(x0);
+  if(wrap < 0)
+    theta = M_PI - theta;
+
+  if(std::abs(theta-M_PI) < 1e-4
+     || std::abs(theta+M_PI) < 1e-4)
+    return Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitZ());
+
+  return Eigen::AngleAxisd(theta, N);
+}
 
 const double AngleWeight = 1.0/(360*M_PI/180.0);
 double diff(const Eigen::Isometry3d& tf1, const Eigen::Isometry3d& tf2,
@@ -107,6 +164,172 @@ Eigen::Isometry3d stepTowards(const Eigen::Isometry3d& target,
   return target;
 }
 
+SkeletonPtr makeBoxObject(const std::string& name,
+                          const Eigen::Vector3d& x,
+                          double yaw,
+                          const Eigen::Vector3d& dim,
+                          const Eigen::Vector4d& color)
+{
+  SkeletonPtr box = Skeleton::create(name);
+
+  box->createJointAndBodyNodePair<FreeJoint>();
+  BoxShapePtr shape = std::make_shared<BoxShape>(dim);
+  ShapeNode* node = box->getBodyNode(0)->createShapeNodeWith<
+      VisualAspect, CollisionAspect, DynamicsAspect>(shape);
+  node->getVisualAspect()->setColor(color);
+
+  Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+  tf.translation() = x;
+  tf.rotate(Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()));
+  box->setPositions(dart::dynamics::FreeJoint::convertToPositions(tf));
+
+  return box;
+}
+
+SkeletonPtr makeWall(const std::string& name,
+                     double x, double y, double theta,
+                     double L, double w, double height,
+                     const Eigen::Vector4d& color,
+                     double bottom = 0.0)
+{
+  const double h = height;
+  SkeletonPtr wall = Skeleton::create(name);
+
+  BodyNode* bn = wall->createJointAndBodyNodePair<WeldJoint>().second;
+  BoxShapePtr shape = std::make_shared<BoxShape>(
+        Eigen::Vector3d(L, w, h));
+  ShapeNode* node = bn->createShapeNodeWith<
+      VisualAspect, CollisionAspect, DynamicsAspect>(shape);
+  node->getVisualAspect()->setColor(color);
+
+  Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+  tf.translate(Eigen::Vector3d(x, y, h/2 + bottom));
+  tf.rotate(Eigen::AngleAxisd(theta, Eigen::Vector3d::UnitZ()));
+  bn->getParentJoint()->setTransformFromParentBodyNode(tf);
+
+  return wall;
+}
+
+SkeletonPtr makeBar(const std::string& name,
+                    double x, double y, double z,
+                    const Eigen::Vector3d& dir,
+                    double R, double L, const Eigen::Vector4d& color)
+{
+  SkeletonPtr bar = Skeleton::create(name);
+
+  BodyNode* bn = bar->createJointAndBodyNodePair<WeldJoint>().second;
+  CylinderShapePtr shape = std::make_shared<CylinderShape>(R, L);
+  ShapeNode* node = bn->createShapeNodeWith<
+      VisualAspect, CollisionAspect, DynamicsAspect>(shape);
+  node->getVisualAspect()->setColor(color);
+
+
+  Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+  tf.translate(Eigen::Vector3d(x, y, z));
+  tf.rotate(findRotation(Eigen::Vector3d::UnitZ(), dir));
+
+  bn->getParentJoint()->setTransformFromParentBodyNode(tf);
+
+  return bar;
+}
+
+SkeletonPtr addBar(const std::vector<Eigen::Vector3d>& points,
+            const double R = DefaultBarRadius,
+            const Eigen::Vector4d& color = DefaultBarColor)
+{
+  assert(points.size() == 2);
+  const Eigen::Vector3d& p0 = points[0];
+  const Eigen::Vector3d& p1 = points[1];
+
+  const double L = (p1-p0).norm();
+  const Eigen::Vector3d c = (p1+p0)/2.0;
+  Eigen::Vector3d dir = p1-p0;
+  dir.normalize();
+
+  return makeBar("bar", c[0], c[1], c[2], dir, R, L, color);
+}
+
+SkeletonPtr addWall(
+             const std::vector<Eigen::Vector2d>& points,
+             const double height = DefaultWallHeight,
+             const Eigen::Vector4d& color = DefaultWallColor)
+{
+  assert(points.size() == 2);
+  const Eigen::Vector2d& p0 = points[0];
+  const Eigen::Vector2d& p1 = points[1];
+
+  const double L = (p1-p0).norm();
+  const Eigen::Vector2d c = (p1+p0)/2.0;
+  const double x = p1[0] - p0[0];
+  const double y = p1[1] - p0[1];
+  const double theta = atan2(y, x);
+
+  return makeWall("wall", c[0], c[1], theta, L, DefaultWallWidth, height, color);
+}
+
+SkeletonPtr addYPost(
+              const Eigen::Vector3d& b,
+              const double nudge,
+              const double thickness = 2*DefaultBarRadius,
+              const Eigen::Vector4d& color = DefaultWallColor)
+{
+  Eigen::Vector2d w0(b[0], b[1]-thickness/2.0+nudge*DefaultWallWidth/2.0);
+  Eigen::Vector2d w1(b[0], b[1]+thickness/2.0+nudge*DefaultWallWidth/2.0);
+
+  return addWall({w0, w1}, b[2]+thickness, color);
+}
+
+void limbo(WorldPtr world)
+{
+//  const double w_x = 3.0;
+  const double w_x = 2.0;
+  const double w_y = 0.8;
+//  const double w_y = 1.2;
+  const double t = DefaultWallWidth/2.0;
+
+//  const double h_box = 0.1;
+  const double h_box = 0.02;
+
+
+//  model->addObstacle(makeWall("north", 0,  w_y+t, 0.0*M_PI/180.0, 2.0*w_x));
+//  model->addObstacle(makeWall("south", 0, -w_y-t, 0.0*M_PI/180.0, 2.0*w_x));
+
+//  Eigen::Vector3d b0(0.8, -w_y, 0.7);
+//  Eigen::Vector3d b1(0.8,  w_y, 1.4);
+//  Eigen::Vector3d b0(0.4, -w_y, 0.7);
+//  Eigen::Vector3d b1(0.4,  w_y, 1.4);
+  Eigen::Vector3d b0(0.0, -w_y, 1.2);
+  Eigen::Vector3d b1(0.0,  w_y, 1.2);
+  world->addSkeleton(addBar({b0, b1}));
+  world->addSkeleton(addYPost(b0,  1.0));
+  world->addSkeleton(addYPost(b1, -1.0));
+}
+
+static void setAlpha(const SkeletonPtr skel, const double alpha)
+{
+  for(size_t i=0; i < skel->getNumBodyNodes(); ++i)
+  {
+    BodyNode* bn = skel->getBodyNode(i);
+    for(size_t j=0; j < bn->getNumShapeNodes(); ++j)
+    {
+      ShapeNode* sn = bn->getShapeNode(j);
+      VisualAspect* visual = sn->getVisualAspect();
+      if(visual)
+      {
+        visual->setRGBA(Eigen::Vector4d(0.9,0.9,0.9,alpha));
+      }
+
+      ShapePtr shape = sn->getShape();
+//      shape->addDataVariance(Shape::DYNAMIC_COLOR);
+      MeshShapePtr ms = std::dynamic_pointer_cast<MeshShape>(shape);
+      if(ms)
+      {
+        ms->setColorMode(MeshShape::SHAPE_COLOR);
+      }
+    }
+  }
+}
+
 static void addBox(const SkeletonPtr& skel,
                    Eigen::Vector3d lower,
                    Eigen::Vector3d upper,
@@ -160,6 +383,145 @@ SkeletonPtr getMinimalRobot(const SkeletonPtr& robot)
   }
 
   return minimal;
+}
+
+SkeletonPtr getWalkSweeper(const SkeletonPtr& hubo)
+{
+  SkeletonPtr sweeper = dart::dynamics::Skeleton::create("walk_sweeper");
+  sweeper->createJointAndBodyNodePair<FreeJoint>();
+  BodyNode* walkSweeper = sweeper->getBodyNode(0);
+  walkSweeper->setName(sweeper->getName());
+  walkSweeper->getParentJoint()->setName(walkSweeper->getName()+"_joint");
+
+  Eigen::Isometry3d base_tf(Eigen::Isometry3d::Identity());
+  const double height = hubo->getEndEffector("l_foot")->getTransform(
+        hubo->getBodyNode(0)).translation()[2] - 0.01;
+  base_tf.translation()[2] = height;
+  sweeper->getJoint(0)->setTransformFromParentBodyNode(base_tf);
+
+
+  Eigen::Vector4d color(dart::Color::Green(DefaultAlpha));
+
+  // Bottom
+  {
+    const double sweepHeight = 0.4;
+    const double sweepWidth = 0.6;
+    const double sweepDepth = 0.5;
+    Eigen::Vector3d sweepOffset(Eigen::Vector3d::Zero());
+    sweepOffset[0] = sweepDepth/2.0 - 0.15;
+    sweepOffset[2] = sweepHeight/2.0;
+
+    dart::dynamics::ShapePtr bottomShape =
+        std::make_shared<dart::dynamics::BoxShape>(
+          Eigen::Vector3d(sweepDepth, sweepWidth, sweepHeight));
+
+    dart::dynamics::ShapeNode* node = walkSweeper->createShapeNodeWith<
+        dart::dynamics::VisualAspect, dart::dynamics::CollisionAspect,
+        dart::dynamics::DynamicsAspect>(bottomShape);
+
+    node->getVisualAspect()->setColor(color);
+    Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+    tf.translate(sweepOffset);
+    node->setRelativeTransform(tf);
+  }
+
+  // Thighs
+  {
+    const double sweepHeight = 0.14;
+    const double sweepWidth = 0.6;
+    const double sweepDepth = 0.48;
+    const double sweepAngle = 40.0*M_PI/180.0;
+    Eigen::Vector3d sweepOffset(Eigen::Vector3d::Zero());
+    sweepOffset[0] = 0.13;
+    sweepOffset[2] = 0.55;
+
+    dart::dynamics::ShapePtr midShape =
+        std::make_shared<dart::dynamics::BoxShape>(
+          Eigen::Vector3d(sweepDepth, sweepWidth, sweepHeight));
+
+    dart::dynamics::ShapeNode* node = walkSweeper->createShapeNodeWith<
+        dart::dynamics::VisualAspect, dart::dynamics::CollisionAspect,
+        dart::dynamics::DynamicsAspect>(midShape);
+
+    node->getVisualAspect()->setColor(color);
+    Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+    tf.translate(sweepOffset);
+    tf.rotate(Eigen::AngleAxisd(sweepAngle, Eigen::Vector3d::UnitY()));
+    node->setRelativeTransform(tf);
+  }
+
+  // Arms
+  {
+    const double sweepHeight = 0.15;
+//    const double sweepHeight = 0.65;
+    const double sweepWidth = 0.9;
+    const double sweepDepth = 0.50;
+    Eigen::Vector3d sweepOffset(Eigen::Vector3d::Zero());
+    sweepOffset[0] = sweepDepth/2.0 - 0.165;
+    sweepOffset[2] = sweepHeight/2.0 + 0.61;
+
+    dart::dynamics::ShapePtr topShape =
+        std::make_shared<dart::dynamics::BoxShape>(
+          Eigen::Vector3d(sweepDepth, sweepWidth, sweepHeight));
+
+    dart::dynamics::ShapeNode* node = walkSweeper->createShapeNodeWith<
+        dart::dynamics::VisualAspect, dart::dynamics::CollisionAspect,
+        dart::dynamics::DynamicsAspect>(topShape);
+
+    node->getVisualAspect()->setColor(color);
+    Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+    tf.translate(sweepOffset);
+    node->setRelativeTransform(tf);
+  }
+
+  // Chest
+  {
+//    const double sweepHeight = 0.50;
+    const double sweepHeight = 0.28;
+    const double sweepWidth = 0.76;
+    const double sweepDepth = 0.31;
+    Eigen::Vector3d sweepOffset(Eigen::Vector3d::Zero());
+    sweepOffset[0] = sweepDepth/2.0 - 0.16;
+    sweepOffset[2] = sweepHeight/2.0 + 0.76;
+
+    dart::dynamics::ShapePtr topShape =
+        std::make_shared<dart::dynamics::BoxShape>(
+          Eigen::Vector3d(sweepDepth, sweepWidth, sweepHeight));
+
+    dart::dynamics::ShapeNode* node = walkSweeper->createShapeNodeWith<
+        dart::dynamics::VisualAspect, dart::dynamics::CollisionAspect,
+        dart::dynamics::DynamicsAspect>(topShape);
+
+    node->getVisualAspect()->setColor(color);
+    Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+    tf.translate(sweepOffset);
+    node->setRelativeTransform(tf);
+  }
+
+  // Head
+  {
+    const double sweepHeight = 0.22;
+    const double sweepWidth = 0.57;
+    const double sweepDepth = 0.13;
+    Eigen::Vector3d sweepOffset(Eigen::Vector3d::Zero());
+    sweepOffset[0] = sweepDepth/2.0 - 0.06;
+    sweepOffset[2] = sweepHeight/2.0 + 1.04;
+
+    dart::dynamics::ShapePtr topShape =
+        std::make_shared<dart::dynamics::BoxShape>(
+          Eigen::Vector3d(sweepDepth, sweepWidth, sweepHeight));
+
+    dart::dynamics::ShapeNode* node = walkSweeper->createShapeNodeWith<
+        dart::dynamics::VisualAspect, dart::dynamics::CollisionAspect,
+        dart::dynamics::DynamicsAspect>(topShape);
+
+    node->getVisualAspect()->setColor(color);
+    Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
+    tf.translate(sweepOffset);
+    node->setRelativeTransform(tf);
+  }
+
+  return sweeper;
 }
 
 std::vector<dart::dynamics::SkeletonPtr> getFootprints()
@@ -222,6 +584,14 @@ void printBox(const std::shared_ptr<Box>& box)
     std::cout << "0 ";
 
   std::cout << ");" << std::endl;
+}
+
+void printBoxes(const std::vector<std::shared_ptr<Box>>& boxes)
+{
+  for(size_t i=0; i < boxes.size(); ++i)
+    printBox(boxes[i]);
+
+  std::cout << " ---- " << std::endl;
 }
 
 void printConfigs(const std::vector<Eigen::VectorXd>& Q)
@@ -1152,14 +1522,26 @@ public:
 //    ADD_BOX(-0.11, 0.005, 0.076, 0.225, 0.15, 0.175, 1 );
 //    ADD_BOX(-0.109144, -0.0590679, 0.337675, 0.35, 0.55, 0.35, 1 );
 
-    ADD_BOX(-0.11, 0.005, 0.076, 0.225, 0.15, 0.175, 1 );
-    ADD_BOX(-0.109144, 0.0103071, 0.337675, 0.5, 0.4, 0.35, 1 );
-    ADD_BOX(-0.15, 0.11, 0.813, 0.8, 0.6, 0.6, 1 );
-    ADD_BOX(-0.15, 0.01, 1.21087, 0.35, 0.4, 0.2, 1 );
-    ADD_BOX(-0.11, -0.005, 0.076, 0.225, 0.15, 0.175, 0 );
-    ADD_BOX(-0.109144, -0.0103071, 0.337675, 0.5, 0.4, 0.35, 0 );
-    ADD_BOX(-0.15, -0.11, 0.813, 0.8, 0.6, 0.6, 0 );
-    ADD_BOX(-0.15, -0.01, 1.21087, 0.35, 0.4, 0.2, 0 );
+
+//    ADD_BOX(-0.11, 0.005, 0.076, 0.225, 0.15, 0.175, 1 );
+//    ADD_BOX(-0.109144, 0.0103071, 0.337675, 0.5, 0.4, 0.35, 1 );
+//    ADD_BOX(-0.15, 0.11, 0.813, 0.8, 0.6, 0.6, 1 );
+//    ADD_BOX(-0.15, 0.01, 1.21087, 0.35, 0.4, 0.2, 1 );
+//    ADD_BOX(-0.11, -0.005, 0.076, 0.225, 0.15, 0.175, 0 );
+//    ADD_BOX(-0.109144, -0.0103071, 0.337675, 0.5, 0.4, 0.35, 0 );
+//    ADD_BOX(-0.15, -0.11, 0.813, 0.8, 0.6, 0.6, 0 );
+//    ADD_BOX(-0.15, -0.01, 1.21087, 0.35, 0.4, 0.2, 0 );
+
+
+    ADD_BOX(-0.110391, 0.00156427, 0.0110119, 0.25, 0.15, 0.05, 1 );
+    ADD_BOX(-0.140391, 0.00656427, 0.0590119, 0.55, 0.5, 0.05, 1 );
+    ADD_BOX(-0.125391, 0.0415643, 0.108012, 0.8, 0.65, 0.05, 1 );
+    ADD_BOX(-0.105739, 0.0294226, 0.15635, 0.8375, 0.675, 0.05, 1 );
+    ADD_BOX(-0.101268, -0.00938678, 0.206045, 0.95, 0.65, 0.05, 1 );
+    ADD_BOX(-0.112681, -0.00614026, 0.25549, 1.1, 0.575, 0.05, 1 );
+    ADD_BOX(-0.0985427, -0.00835481, 0.305927, 1.3, 0.525, 0.05, 1 );
+    ADD_BOX(-0.0935731, 0.0031974, 0.355399, 1.225, 0.45, 0.05, 1 );
+    ADD_BOX(-0.100817, 0.00413067, 0.406698, 1.1, 0.375, 0.05, 1 );
 
 
 //    ADD_CONFIG(-0.0064084, 0.0542555, 1.56454, 0.592375, -0.99157, 1.28162, 0.00726405, -0.0933735, -0.362946, 1.02419, -0.699833, 0.06266, 0.00723432, -0.09414, -0.393854, 1.06434, -0.709078, 0.0634271, -6.38935e-10, 0.674194, -0.0433137, -0.00769002, -2.29854, -0.0163607, 0.0576931, -0.0123386, 0, 0, 0, 0.778503, -0.0283702, 0.115122, -2.30866, 0.0251078, 0.00902984, 0.0115897);
@@ -1178,21 +1560,40 @@ public:
 //    ADD_CONFIG(-0.0427557, 0.0310215, 1.54569, 0.626322, 0.905528, -0.18888, 0.0304413, 0.0306547, -0.653296, 1.2189, -0.612867, -0.0239792, 0.0304351, 0.030523, -0.647355, 1.22068, -0.620596, -0.0238474, -6.38935e-10, 0.557723, 0, 0, -1.61551, 5.57197e-08, -0.118365, 5.54044e-08, 0, 0, 0, 0.639658, 0, 0, -1.69424, 0, 0.0223095, -3.71196e-10);
 
 
-    ADD_CONFIG(0, 0, 0, 0, 0, 0.76662, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
-    ADD_CONFIG(0, 0, 0, -1.7925, 0, 0.83037, 0, 0, -0.405784, 1.26095, -0.85517, 0, 0, 0, -0.93727, 1.12304, -0.18577, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
-    ADD_CONFIG(0.010739, 0.472984, -0.0166738, -1.7875, 0, 0.83037, 0.0116087, -0.0180401, -1.00013, 1.22387, -0.69667, 0.004299, 0.0115756, -0.0181049, -1.36142, 0.811991, 0.0764968, 0.00437179, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
-    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, -0.837609, -0.0146939, 0.73937, -0.0276086, 0.0191315, 0.213719, 1.09865, -0.877419, -0.00486763, -0.0275317, 0.0189661, -0.391096, 1.14419, -0.318148, -0.00468524, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
-    ADD_CONFIG(0.010739, 0.472984, -0.0166738, -0.467653, -0.0201153, 0.74137, 0.00722262, -0.0266093, -1.35091, 0.755238, 0.122637, 0.0139249, 0.0162932, -0.00888492, -0.92129, 1.20582, -0.757402, -0.00598482, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
-    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 0.301939, 0.0174184, 0.73937, -0.0375264, 0.0404603, -0.472735, 0.89778, 0.0101975, -0.0283876, -0.0226695, 0.00850125, -0.0205193, 1.20845, -0.753047, 0.0068538, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
-    ADD_CONFIG(0.010739, 0.472984, -0.0166738, 0.817198, -0.0396972, 0.74137, 0.0127696, -0.0157716, -0.797336, 1.14283, -0.818414, 0.00175075, 0.0116402, -0.0179786, -1.36284, 0.82949, 0.060416, 0.00422992, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
-    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 1.63641, 0.0550236, 0.73937, -0.0280297, 0.0200378, 0.0631171, 1.52229, -1.15045, -0.00586693, -0.0279275, 0.0198177, -0.648348, 1.56244, -0.479141, -0.00562427, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
-    ADD_CONFIG(-0.0884185, 0.467971, 0.394323, -1.76911, 0.00785536, 0.83037, -0.340548, 0.219028, -0.997312, 1.22497, -0.674541, -0.0508541, -0.311425, 0.21401, -1.65174, 1.07575, -0.320413, -0.0653585, -0.447719, -0.937051, 0.107684, -0.0416174, -1.54725, 0.361615, 0.0149998, -0.207424, 0, 0, 0, 0.711052, 0.00939222, -0.376081, -1.00428, -0.135502, -0.223307, -0.460984);
-    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, -0.837609, -0.0146939, 0.73937, -0.0312993, 0.0160104, 0.1628, 1.46851, -0.281912, -0.00588489, -0.0275317, 0.0189661, -0.391096, 1.14419, -0.318148, -0.00468524, 0, -0.191409, 0.0471485, -0.0162657, -1.13354, 0.0226592, -0.251753, 0.0284777, 0, 0, 0, 0.81341, -0.0948062, -0.114358, -1.33267, -0.139596, -0.441466, -0.160936);
-    ADD_CONFIG(0.010739, 0.472984, -0.0166738, -0.467653, -0.0201153, 0.74137, 0.00400309, -0.0234543, -1.57893, 0.879265, -0.102893, 0.0132982, 0.0162932, -0.00888492, -0.92129, 1.20582, -0.757402, -0.00598482, 0, 0.706595, 0.0974204, -0.242543, -0.640141, 0.336393, -0.14842, -0.0597675, 0, 0, 0, -0.423601, -0.147833, 0.0570435, -1.7182, -0.117669, -0.37894, 0.028999);
-    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 0.302958, -0.042573, 0.73937, -0.0308769, 0.0261635, -0.478209, 0.9838, -0.0705699, -0.0126216, -0.0173139, 0.0123333, 0.0841802, 1.5461, -0.341139, 0.00858068, 0, 1.32366, 0.102771, 0.278691, -1.12307, 0.0945863, 0.0673144, 0.112537, 0, 0, 0, -0.0338947, 0.0507568, -0.00493848, -1.39261, 0.0228408, -0.144186, 0.028243);
-//    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 0.301939, 0.0174184, 0.73937, -0.0375264, 0.0404603, -0.472735, 0.89778, 0.0101975, -0.0283876, -0.0173139, 0.0123333, 0.0841802, 1.5461, -0.341139, 0.00858068, 0, 1.32366, 0.102771, 0.278691, -1.12307, 0.0945863, 0.0673144, 0.112537, 0, 0, 0, -0.0338947, 0.0507568, -0.00493848, -1.39261, 0.0228408, -0.144186, 0.028243);
-    ADD_CONFIG(0.010739, 0.472984, -0.0166738, 0.817198, -0.0396972, 0.74137, 0.0127696, -0.0157716, -0.797336, 1.14283, -0.818414, 0.00175075, 0.0101865, -0.0163325, -1.6562, 1.03036, -0.384914, 0.00398978, 0, -0.801251, 0.246015, -0.00490418, -1.65162, -0.0548297, 0.0090178, 0.234999, 0, 0, 0, 0.761586, -0.125419, -0.00162068, -0.619121, -0.0270319, 0.136909, -0.138378);
-    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 1.63641, 0.0550236, 0.73937, -0.0306251, 0.0163461, 0.261575, 1.36128, -0.362954, -0.00532234, -0.0279275, 0.0198177, -0.648348, 1.56244, -0.479141, -0.00562427, 0, -0.279874, 0.222149, -0.0873567, -1.09222, 0.113565, -0.206902, 0.126148, 0, 0, 0, 1.36927, -0.00902004, -0.0218707, -1.22307, 0.177575, 0.161155, -0.250746);
+//    ADD_CONFIG(0, 0, 0, 0, 0, 0.76662, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, 0, -1.7925, 0, 0.83037, 0, 0, -0.405784, 1.26095, -0.85517, 0, 0, 0, -0.93727, 1.12304, -0.18577, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0.010739, 0.472984, -0.0166738, -1.7875, 0, 0.83037, 0.0116087, -0.0180401, -1.00013, 1.22387, -0.69667, 0.004299, 0.0115756, -0.0181049, -1.36142, 0.811991, 0.0764968, 0.00437179, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, -0.837609, -0.0146939, 0.73937, -0.0276086, 0.0191315, 0.213719, 1.09865, -0.877419, -0.00486763, -0.0275317, 0.0189661, -0.391096, 1.14419, -0.318148, -0.00468524, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0.010739, 0.472984, -0.0166738, -0.467653, -0.0201153, 0.74137, 0.00722262, -0.0266093, -1.35091, 0.755238, 0.122637, 0.0139249, 0.0162932, -0.00888492, -0.92129, 1.20582, -0.757402, -0.00598482, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 0.301939, 0.0174184, 0.73937, -0.0375264, 0.0404603, -0.472735, 0.89778, 0.0101975, -0.0283876, -0.0226695, 0.00850125, -0.0205193, 1.20845, -0.753047, 0.0068538, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0.010739, 0.472984, -0.0166738, 0.817198, -0.0396972, 0.74137, 0.0127696, -0.0157716, -0.797336, 1.14283, -0.818414, 0.00175075, 0.0116402, -0.0179786, -1.36284, 0.82949, 0.060416, 0.00422992, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 1.63641, 0.0550236, 0.73937, -0.0280297, 0.0200378, 0.0631171, 1.52229, -1.15045, -0.00586693, -0.0279275, 0.0198177, -0.648348, 1.56244, -0.479141, -0.00562427, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(-0.0884185, 0.467971, 0.394323, -1.76911, 0.00785536, 0.83037, -0.340548, 0.219028, -0.997312, 1.22497, -0.674541, -0.0508541, -0.311425, 0.21401, -1.65174, 1.07575, -0.320413, -0.0653585, -0.447719, -0.937051, 0.107684, -0.0416174, -1.54725, 0.361615, 0.0149998, -0.207424, 0, 0, 0, 0.711052, 0.00939222, -0.376081, -1.00428, -0.135502, -0.223307, -0.460984);
+//    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, -0.837609, -0.0146939, 0.73937, -0.0312993, 0.0160104, 0.1628, 1.46851, -0.281912, -0.00588489, -0.0275317, 0.0189661, -0.391096, 1.14419, -0.318148, -0.00468524, 0, -0.191409, 0.0471485, -0.0162657, -1.13354, 0.0226592, -0.251753, 0.0284777, 0, 0, 0, 0.81341, -0.0948062, -0.114358, -1.33267, -0.139596, -0.441466, -0.160936);
+//    ADD_CONFIG(0.010739, 0.472984, -0.0166738, -0.467653, -0.0201153, 0.74137, 0.00400309, -0.0234543, -1.57893, 0.879265, -0.102893, 0.0132982, 0.0162932, -0.00888492, -0.92129, 1.20582, -0.757402, -0.00598482, 0, 0.706595, 0.0974204, -0.242543, -0.640141, 0.336393, -0.14842, -0.0597675, 0, 0, 0, -0.423601, -0.147833, 0.0570435, -1.7182, -0.117669, -0.37894, 0.028999);
+//    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 0.302958, -0.042573, 0.73937, -0.0308769, 0.0261635, -0.478209, 0.9838, -0.0705699, -0.0126216, -0.0173139, 0.0123333, 0.0841802, 1.5461, -0.341139, 0.00858068, 0, 1.32366, 0.102771, 0.278691, -1.12307, 0.0945863, 0.0673144, 0.112537, 0, 0, 0, -0.0338947, 0.0507568, -0.00493848, -1.39261, 0.0228408, -0.144186, 0.028243);
+////    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 0.301939, 0.0174184, 0.73937, -0.0375264, 0.0404603, -0.472735, 0.89778, 0.0101975, -0.0283876, -0.0173139, 0.0123333, 0.0841802, 1.5461, -0.341139, 0.00858068, 0, 1.32366, 0.102771, 0.278691, -1.12307, 0.0945863, 0.0673144, 0.112537, 0, 0, 0, -0.0338947, 0.0507568, -0.00493848, -1.39261, 0.0228408, -0.144186, 0.028243);
+//    ADD_CONFIG(0.010739, 0.472984, -0.0166738, 0.817198, -0.0396972, 0.74137, 0.0127696, -0.0157716, -0.797336, 1.14283, -0.818414, 0.00175075, 0.0101865, -0.0163325, -1.6562, 1.03036, -0.384914, 0.00398978, 0, -0.801251, 0.246015, -0.00490418, -1.65162, -0.0548297, 0.0090178, 0.234999, 0, 0, 0, 0.761586, -0.125419, -0.00162068, -0.619121, -0.0270319, 0.136909, -0.138378);
+//    ADD_CONFIG(-0.0200414, -0.434693, 0.0219532, 1.63641, 0.0550236, 0.73937, -0.0306251, 0.0163461, 0.261575, 1.36128, -0.362954, -0.00532234, -0.0279275, 0.0198177, -0.648348, 1.56244, -0.479141, -0.00562427, 0, -0.279874, 0.222149, -0.0873567, -1.09222, 0.113565, -0.206902, 0.126148, 0, 0, 0, 1.36927, -0.00902004, -0.0218707, -1.22307, 0.177575, 0.161155, -0.250746);
+
+
+//    ADD_CONFIG(0, 0, -1.5708, -0.252783, 1.07924, -4.78138, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, -1.5708, -0.252783, 0.394236, -4.78138, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, -1.02974, -0.204075, 0.168254, -4.78138, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, -0.855211, -0.0654131, -0.020373, -4.78138, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, -0.366519, 0.0833809, -0.130205, -4.78138, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, 0.0523599, 0.455177, -0.18563, -4.78138, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, 0.261799, 1.45381, -0.133294, -4.78138, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, 0.593412, 3.66934, 0.955254, -4.78138, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0, -0.785398, 1.5708, -0.785398, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, -1.5708, -0.252783, 0.314236, -4.78138, 0, -6.29756e-07, -0.600877, 1.54135, -0.940468, 6.29756e-07, 0, 7.87196e-07, -0.973573, 1.52492, -0.551345, -7.87196e-07, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, 0.261799, 0.803358, -0.255818, -4.78138, -5.14339e-07, 0.127883, -1.06782, 1.40482, -0.336989, -0.127883, -5.14338e-07, 0.127883, -0.618143, 1.53171, -0.913559, -0.127883, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+//    ADD_CONFIG(0, 0, 0.261799, 2.13754, 0.174143, -4.78138, 1.02868e-06, -0.251714, -0.346029, 1.37048, -1.02445, 0.251714, 1.02868e-06, -0.251715, -0.948886, 1.44886, -0.499972, 0.251715, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+
+
+    ADD_CONFIG(0, 0, 0, -0.81, 0, 0.87462, 0, 0, -0.513997, 1.02807, -0.514072, 0, 0, 0, -0.513997, 1.02807, -0.514072, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(0, 0, 0, -0.5, 0, 0.73462, 0, 0, -0.851831, 1.70364, -0.85181, 0, 0, 0, -0.851831, 1.70364, -0.85181, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(0, 0, 0, -0.05, 0, 0.73462, 0, 0, -0.851831, 1.70364, -0.85181, 0, 0, 0, -0.851831, 1.70364, -0.85181, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
+    ADD_CONFIG(0, 0, 0, 0.55, 0, 0.89062, 0, 0, -0.462289, 0.924667, -0.462378, 0, 0, 0, -0.462289, 0.924667, -0.462378, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0, 0, 0, 0, 0.523599, 0, 0, -2.0944, 0, 0, 0);
 
 
     mSelectedBox = -1;
@@ -1233,7 +1634,7 @@ public:
 
     mMoveComponents.resize(TeleoperationWorld::NUM_MOVE, false);
 
-    createInitialBoxes();
+//    createInitialBoxes();
     mViewer->getCamera()->getViewMatrixAsLookAt(eye, center, up);
 
     c_index = -1;
@@ -1271,6 +1672,7 @@ public:
     std::vector<SkeletonPtr> copies;
 //    SkeletonPtr mc = minimals[2]->clone("mc_#"+std::to_string(minimalCopies.size()));
     SkeletonPtr mc = getMinimalRobot(mHubo);
+//    SkeletonPtr mc = getWalkSweeper(mHubo);
     mc->setPositions(FreeJoint::convertToPositions(tf));
     copies.push_back(mc);
     minimalCopies.push_back(copies);
@@ -1347,6 +1749,13 @@ public:
         selectBox();
       }
 
+      if( ea.getKey() == 'o' )
+      {
+        mInitialLeftTf = mHubo->getEndEffector("l_foot")->getTransform();
+
+        return true;
+      }
+
       if( ea.getKey() == 'p' )
       {
 //        for(std::size_t i=0; i < mHubo->getNumDofs(); ++i)
@@ -1354,12 +1763,25 @@ public:
 //                    << mHubo->getDof(i)->getPosition() << std::endl;
 //        return true;
 
+//        std::cout << mHubo->getEndEffector("l_foot")->getTransform(
+//              mHubo->getBodyNode(0)).matrix() << std::endl;
 
-//        for(size_t i=0; i < boxes.size(); ++i)
-//          printBox(boxes[i]);
-//        std::cout << " ---- " << std::endl;
+        const Eigen::Isometry3d tf = mInitialLeftTf.inverse()*
+            mHubo->getEndEffector("l_foot")->getTransform();
 
-        printConfigs(configs);
+        Eigen::AngleAxisd aa(tf.linear());
+        const double angle = dart::math::wrapToPi(aa.angle())*
+            (Eigen::Vector3d::UnitZ().dot(aa.axis()))*180.0/M_PI;
+
+
+        std::cout << tf.translation()[0] << ", "
+                  << tf.translation()[1] << ", "
+                  << angle << std::endl;
+
+
+//        printBoxes(boxes);
+
+//        printConfigs(configs);
 
         return true;
       }
@@ -1512,23 +1934,24 @@ public:
         return true;
       }
 
+      if( ea.getKey() == 'm' )
+      {
+        createBox();
+        printBoxes(boxes);
+        return true;
+      }
+
 //      if( ea.getKey() == 'm' )
 //      {
-//        createBox();
+//        jumpConfigs.push_back(mHubo->getPositions());
 //        return true;
 //      }
 
-      if( ea.getKey() == 'm' )
-      {
-        jumpConfigs.push_back(mHubo->getPositions());
-        return true;
-      }
-
-      if( ea.getKey() == 'M' )
-      {
-        jumpConfigs.clear();
-        return true;
-      }
+//      if( ea.getKey() == 'M' )
+//      {
+//        jumpConfigs.clear();
+//        return true;
+//      }
 
       if( ea.getKey() == 'n' )
       {
@@ -1703,7 +2126,8 @@ public:
         mHubo->setPositions(jumpConfigs[1]);
         const Eigen::Isometry3d tf1 = mHubo->getBodyNode(0)->getWorldTransform();
 
-        const double rho = 1e-2;
+//        const double rho = 1e-2;
+        const double rho = 1e-3;
         const Eigen::Vector2d x0 = tf0.translation().block<2,1>(0,0);
         const double z0 = tf0.translation()[2];
         const Eigen::Vector2d x1 = tf1.translation().block<2,1>(0,0);
@@ -1855,17 +2279,68 @@ public:
         return true;
       }
 
+//      if( 'x' == ea.getKey() )
+//      {
+//        EndEffector* ee = mHubo->getEndEffector("l_foot");
+//        ee->getSupport()->setActive(!ee->getSupport()->isActive());
+//        return true;
+//      }
+
       if( 'x' == ea.getKey() )
       {
-        EndEffector* ee = mHubo->getEndEffector("l_foot");
-        ee->getSupport()->setActive(!ee->getSupport()->isActive());
+        for(size_t i=0; i < clones.size(); ++i)
+        {
+          mWorld->removeSkeleton(clones[i]);
+        }
+
+        clones.clear();
         return true;
       }
 
+//      if( 'c' == ea.getKey() )
+//      {
+//        EndEffector* ee = mHubo->getEndEffector("r_foot");
+//        ee->getSupport()->setActive(!ee->getSupport()->isActive());
+//        return true;
+//      }
+
       if( 'c' == ea.getKey() )
       {
-        EndEffector* ee = mHubo->getEndEffector("r_foot");
-        ee->getSupport()->setActive(!ee->getSupport()->isActive());
+        SkeletonPtr newClone = mHubo->clone("hubo_#"+clones.size());
+        newClone->setPositions(mHubo->getPositions());
+        setAlpha(newClone, 1.0);
+
+        const double a0 = 0.3;
+        const double a1 = 0.95;
+        for(size_t i=0; i < clones.size(); ++i)
+        {
+          const double a = (a1-a0)/clones.size()*i+a0;
+          setAlpha(clones[i], a);
+        }
+
+        for(size_t i=0; i < clones.size(); ++i)
+        {
+          mWorld->removeSkeleton(clones[i]);
+        }
+
+        clones.push_back(newClone);
+
+        for(size_t i=0; i < clones.size(); ++i)
+        {
+          mWorld->addSkeleton(clones[i]);
+        }
+
+        return true;
+      }
+
+      if( 'C' == ea.getKey() )
+      {
+        for(size_t i=0; i < clones.size(); ++i)
+        {
+          mWorld->removeSkeleton(clones[i]);
+        }
+
+//        clones.clear();
         return true;
       }
 
@@ -2069,6 +2544,10 @@ public:
   std::vector<Eigen::VectorXd> configs;
   std::vector<Eigen::VectorXd> jumpConfigs;
   int c_index;
+
+  std::vector<SkeletonPtr> clones;
+
+  Eigen::Isometry3d mInitialLeftTf;
 };
 
 
@@ -2479,22 +2958,25 @@ int main()
 //  world->addSkeleton(createGround());
 
 
-  dart::dynamics::SkeletonPtr env = Skeleton::create("scene");
-  dart::dynamics::BodyNode* bn = env->createJointAndBodyNodePair<
-      dart::dynamics::WeldJoint>().second;
+//  dart::dynamics::SkeletonPtr env = Skeleton::create("scene");
+//  dart::dynamics::BodyNode* bn = env->createJointAndBodyNodePair<
+//      dart::dynamics::WeldJoint>().second;
 
 //  const std::string path = "/home/grey/projects/posgraph/data/models/UnevenEnvObj/";
 //  const std::string file = path+"UnevenEnv.obj";
-  const std::string path = "/home/grey/projects/posgraph/data/models/DoubleJumpEnvObj/";
-  const std::string file = path+"DoubleJumpEnv.obj";
-  dart::common::ResourceRetrieverPtr relative =
-      std::make_shared<dart::common::RelativeResourceRetriever>(path);
-  const aiScene* scene = dart::dynamics::MeshShape::loadMesh(file, relative);
-  dart::dynamics::MeshShapePtr mesh = std::make_shared<MeshShape>(
-        0.0254*Eigen::Vector3d::Ones(), scene, file);
-  bn->createShapeNodeWith<dart::dynamics::VisualAspect,
-                          dart::dynamics::CollisionAspect>(mesh);
-  world->addSkeleton(env);
+////  const std::string path = "/home/grey/projects/posgraph/data/models/DoubleJumpEnvObj/";
+////  const std::string file = path+"DoubleJumpEnv.obj";
+//  dart::common::ResourceRetrieverPtr relative =
+//      std::make_shared<dart::common::RelativeResourceRetriever>(path);
+//  const aiScene* scene = dart::dynamics::MeshShape::loadMesh(file, relative);
+//  dart::dynamics::MeshShapePtr mesh = std::make_shared<MeshShape>(
+//        0.0254*Eigen::Vector3d::Ones(), scene, file);
+//  bn->createShapeNodeWith<dart::dynamics::VisualAspect,
+//                          dart::dynamics::CollisionAspect>(mesh);
+//  world->addSkeleton(env);
+
+
+//  limbo(world);
 
 
   setupWholeBodySolver(hubo);
@@ -2502,7 +2984,7 @@ int main()
   ::osg::ref_ptr<TeleoperationWorld> node = new TeleoperationWorld(world, hubo);
 
   Viewer viewer;
-//  viewer.getCamera()->setClearColor(osg::Vec4(1.0, 1.0, 1.0, 1.0));
+  viewer.getCamera()->setClearColor(osg::Vec4(1.0, 1.0, 1.0, 1.0));
   viewer.allowSimulation(false);
   viewer.addWorldNode(node);
 

@@ -432,6 +432,8 @@ public:
         return;
 
       const PickInfo& pick = picks[0];
+      if(!pick.frame)
+        return;
 
       for(std::size_t s=0; s < (std::size_t)InteractiveTool::NUM_TYPES; ++s)
       {
