@@ -56,6 +56,10 @@ public:
     MESH,
     SOFT_MESH,
     LINE_SEGMENT
+
+#ifdef DART_DYNAMICS_HAVE_OCTOMAP_
+    , OCTREE // TODO(MXG): Decide whether or not we should guard this with the macros
+#endif // DART_DYNAMICS_HAVE_OCTOMAP_
   };
 
   /// DataVariance can be used by renderers to determine whether it should

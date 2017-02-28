@@ -55,6 +55,10 @@ if(HAVE_BULLET_COLLISION)
   target_link_libraries(dart ${BULLET_LIBRARIES})
 endif()
 
+if(HAVE_OCTOMAP)
+  target_link_libraries(dart ${OCTOMAP_LIBRARIES})
+endif()
+
 if(MSVC)
   set_target_properties(
     ${target} PROPERTIES

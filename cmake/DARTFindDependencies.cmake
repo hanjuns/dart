@@ -123,6 +123,21 @@ if(ENABLE_OPENMP)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
+#--------------------------------
+# Dependencies for dart-dynamics
+#--------------------------------
+
+# Octomap
+find_package(Octomap 1.8.0 QUIET)
+if(Octomap_FOUND)
+  message(STATUS "Looking for Octomap - ${Octomap_VERSION} found")
+  set(HAVE_OCTOMAP TRUE)
+  add_definitions(-DDART_DYNAMICS_HAVE_OCTOMAP_)
+else()
+  message(STATUS "Looking for Octomap - NOT found, to use dart::dynamics::OcTreeShape, please install Octomap (>= 1.8.0)")
+  set(HAVE_OCTOMAP FALSE)
+endif()
+
 #---------------------------------
 # Dependencies for dart-optimizer
 #---------------------------------
