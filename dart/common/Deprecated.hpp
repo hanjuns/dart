@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2013-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2013-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2013-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -29,10 +29,10 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/config.hpp"
-
 #ifndef DART_COMMON_DEPRECATED_HPP_
 #define DART_COMMON_DEPRECATED_HPP_
+
+#include "dart/config.hpp"
 
 //==============================================================================
 // Deprecated is used for backward compatibility between different minor
@@ -41,14 +41,14 @@
 //==============================================================================
 
 #if defined(__GNUC__) || defined(__clang__)
-  #define DEPRECATED(version) __attribute__ ((deprecated))
-  #define FORCEINLINE __attribute__((always_inline))
+  #define DART_DEPRECATED(version) __attribute__ ((deprecated))
+  #define DART_FORCEINLINE __attribute__((always_inline))
 #elif defined(_MSC_VER)
-  #define DEPRECATED(version) __declspec(deprecated)
-  #define FORCEINLINE __forceinline
+  #define DART_DEPRECATED(version) __declspec(deprecated)
+  #define DART_FORCEINLINE _forceinline
 #else
-  #define DEPRECATED(version) ()
-  #define FORCEINLINE
+  #define DART_DEPRECATED(version) ()
+  #define DART_FORCEINLINE
 #endif
 
 // We define two convenient macros that can be used to suppress
