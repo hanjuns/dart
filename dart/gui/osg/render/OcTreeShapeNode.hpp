@@ -32,8 +32,6 @@
 #ifndef DART_GUI_OSG_RENDER_OCTREESHAPENODE_HPP_
 #define DART_GUI_OSG_RENDER_OCTREESHAPENODE_HPP_
 
-#ifdef DART_DYNAMICS_HAVE_OCTOMAP_
-
 #include <osg/MatrixTransform>
 #include "dart/gui/osg/render/ShapeNode.hpp"
 
@@ -73,7 +71,5 @@ protected:
 } // namespace gui
 
 }
-
-#endif // DART_DYNAMICS_HAVE_OCTOMAP_
 
 #endif // OCTREESHAPENODE_HPP

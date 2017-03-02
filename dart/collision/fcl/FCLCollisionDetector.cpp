@@ -933,6 +933,14 @@ FCLCollisionDetector::createFCLCollisionGeometry(
 
       break;
     }
+    case Shape::OCTREE:
+    {
+      assert(dynamic_cast<const OcTreeShape*>(shape.get()));
+
+      auto ocTreeShape = static_cast<const OcTreeShape*>(shape.get());
+
+      break;
+    }
     default:
     {
       dterr << "[FCLCollisionDetector] Attempting to create unsupported shape "

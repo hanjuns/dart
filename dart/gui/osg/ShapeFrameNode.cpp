@@ -249,7 +249,6 @@ void ShapeFrameNode::createShapeNode(
       break;
     }
 
-#ifdef DART_DYNAMICS_HAVE_OCTOMAP_
     case Shape::OCTREE:
     {
       std::shared_ptr<OcTreeShape> oss =
@@ -260,7 +259,6 @@ void ShapeFrameNode::createShapeNode(
         warnAboutUnsuccessfulCast("OcTreeShape", mShapeFrame->getName());
       break;
     }
-#endif // DART_DYNAMICS_HAVE_OCTOMAP_
 
     default:
       mShapeNode = new render::WarningShapeNode(shape, this);
