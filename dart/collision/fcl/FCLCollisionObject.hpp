@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -34,6 +34,7 @@
 
 #include <fcl/collision_object.h>
 #include "dart/collision/CollisionObject.hpp"
+#include "dart/collision/fcl/FCLTypes.hpp"
 
 namespace dart {
 namespace collision {
@@ -64,7 +65,7 @@ protected:
   /// Constructor
   FCLCollisionObject(CollisionDetector* collisionDetector,
       const dynamics::ShapeFrame* shapeFrame,
-      const boost::shared_ptr<fcl::CollisionGeometry>& fclCollGeom);
+      const fcl_shared_ptr<fcl::CollisionGeometry>& fclCollGeom);
 
   // Documentation inherited
   void updateEngineData() override;
