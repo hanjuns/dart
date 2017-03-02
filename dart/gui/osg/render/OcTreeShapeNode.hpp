@@ -29,65 +29,51 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/dynamics/OcTreeShape.hpp"
+#ifndef DART_GUI_OSG_RENDER_OCTREESHAPENODE_HPP_
+#define DART_GUI_OSG_RENDER_OCTREESHAPENODE_HPP_
+
+#ifdef DART_DYNAMICS_HAVE_OCTOMAP_
+
+#include <osg/MatrixTransform>
+#include "dart/gui/osg/render/ShapeNode.hpp"
 
 namespace dart {
+
 namespace dynamics {
-
-//==============================================================================
-OcTreeShape::OcTreeShape(
-    const double resolution,
-    const double occupancyThreshold,
-    const std::vector<Eigen::Vector3d>& occupiedPoints)
-  : Shape(OCTREE),
-    octomap::OcTree(resolution)
-{
-  for(const Eigen::Vector3d& p : occupiedPoints)
-    updateNode(p[0], p[1], p[2], true, true);
-
-  setOccupancyThres(occupancyThreshold);
-  updateInnerOccupancy();
-}
-
-//==============================================================================
-OcTreeShape::OcTreeShape(
-    const double resolution,
-    const double occupancyThreshold,
-    const std::vector<std::pair<Eigen::Vector3d, float> >& probablePoints)
-  : Shape(OCTREE),
-    octomap::OcTree(resolution)
-{
-  for(const std::pair<Eigen::Vector3d, float>& entry : probablePoints)
-  {
-    const Eigen::Vector3d& p = entry.first;
-    const float value = entry.second;
-    updateNode(p[0], p[1], p[2], value, true);
-  }
-
-  setOccupancyThres(occupancyThreshold);
-  updateInnerOccupancy();
-}
-
-//==============================================================================
-OcTreeShape::OcTreeShape(const std::string& filename)
-  : Shape(OCTREE),
-    octomap::OcTree(filename)
-{
-  // Do nothing
-}
-
-//==============================================================================
-Eigen::Matrix3d OcTreeShape::computeInertia(double) const
-{
-  // TODO(MXG) Do this later
-  return Eigen::Matrix3d::Zero();
-}
-
-//==============================================================================
-void OcTreeShape::updateVolume()
-{
-  // TODO(MXG) Do this later
-}
-
+class OcTreeShape;
 } // namespace dynamics
-} // namespace dart
+
+namespace gui {
+namespace osg {
+namespace render {
+
+class OcTreeShapeGeode;
+
+class OcTreeShapeNode : public ShapeNode, public ::osg::Group
+{
+public:
+
+  OcTreeShapeNode(std::shared_ptr<dart::dynamics::OcTreeShape> shape,
+                  ShapeFrameNode* parent);
+
+  void refresh();
+  void extractData(bool firstTime);
+
+protected:
+
+  virtual ~OcTreeShapeNode();
+
+  std::shared_ptr<dart::dynamics::OcTreeShape> mOcTreeShape;
+  OcTreeShapeGeode* mGeode;
+
+};
+
+} // namespace render
+} // namespace osg
+} // namespace gui
+
+}
+
+#endif // DART_DYNAMICS_HAVE_OCTOMAP_
+
+#endif // OCTREESHAPENODE_HPP

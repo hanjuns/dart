@@ -12,6 +12,10 @@ add_subdirectory(render)
 # Library
 dart_add_library(dart-gui-osg ${dart_gui_osg_srcs} ${dart_gui_osg_hdrs})
 target_link_libraries(dart-gui-osg dart-gui ${OPENSCENEGRAPH_LIBRARIES})
+if(HAVE_OCTOMAP)
+  target_link_libraries(dart-gui-osg ${OCTOMAP_LIBRARIES})
+  message(STATUS "Linking octomap_libraries to dart-gui-osg: ${OCTOMAP_LIBRARIES}")
+endif()
 
 # Generate header for this namespace
 dart_get_filename_components(header_names "gui osg headers" ${hdrs})

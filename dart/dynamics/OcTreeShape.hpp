@@ -32,8 +32,6 @@
 #ifndef DART_DYNAMICS_OCTREESHAPE_HPP_
 #define DART_DYNAMICS_OCTREESHAPE_HPP_
 
-#ifdef DART_DYNAMICS_HAVE_OCTOMAP_
-
 #include "dart/dynamics/Shape.hpp"
 
 #include <octomap/octomap.h>
@@ -49,6 +47,7 @@ public:
   /// list of points as "occupied" nodes to the OcTree
   explicit OcTreeShape(
       const double resolution,
+      const double occupancyThreshold,
       const std::vector<Eigen::Vector3d>& occupiedPoints = {});
 
   /// Uses the octomap::OcTree(double) constructor and then adds the provided
@@ -59,6 +58,7 @@ public:
   /// assigned to that node.
   explicit OcTreeShape(
       const double resolution,
+      const double occupancyThreshold,
       const std::vector<std::pair<Eigen::Vector3d, float>>& probablePoints);
 
   /// Uses the octomap::OcTree(std::string) constructor
@@ -66,11 +66,12 @@ public:
 
   // Documentation inherited
   Eigen::Matrix3d computeInertia(double mass) const override;
+
+  // Documentation inherited
+  void updateVolume() override;
 };
 
 } // namespace dynamics
 } // namespace dart
-
-#endif // DART_DYNAMICS_HAVE_OCTOMAP_
 
 #endif // DART_DYNAMICS_OCTREESHAPE_HPP_
