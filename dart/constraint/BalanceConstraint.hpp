@@ -1,7 +1,7 @@
 /*
+ * Copyright (c) 2015-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2015-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2015-2017, Graphics Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -64,7 +64,8 @@ public:
   {
     FROM_CENTROID = 0,
     FROM_EDGE,
-    OPTIMIZE_BALANCE
+    OPTIMIZE_BALANCE,
+    OFF
   };
 
   /// The BalanceMethod_t determines whether balancing should be achieved by
@@ -134,11 +135,20 @@ public:
   /// Get the last error vector that was computed by this BalanceConstraint
   const Eigen::Vector3d& getLastError() const;
 
+  /// Set the per-component weights for the gradient
+  void setGradientWeights(const Eigen::VectorXd& weights);
+
+  /// Get the per-component weights for the gradient
+  const Eigen::VectorXd& getGradientWeights() const;
+
   /// Clear the caches to force the error computation to update. It should not
   /// generally be necessary to call this function.
   void clearCaches();
 
 protected:
+
+  /// Apply the weights to the gradient components
+  void applyGradientWeights(Eigen::VectorXd& grad) const;
 
   /// Convert the gradient that gets generated via Jacobian methods into a
   /// gradient that can be used by a GradientDescentSolver.
@@ -160,6 +170,9 @@ protected:
 
   /// The damping factor for the pseudoinverse
   double mDamping;
+
+  /// Weights applied to DOFs
+  Eigen::VectorXd mGradientWeights;
 
   /// The indices of the supporting end effectors that are closest to the center
   /// of mass. These are used when using FROM_EDGE
