@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -54,7 +54,7 @@ class VisualAspect final :
 {
 public:
 
-  using BaseClass = common::AspectWithVersionedProperties<
+  using Base = common::AspectWithVersionedProperties<
       VisualAspect, detail::VisualAspectProperties, ShapeFrame>;
 
   /// Constructor
@@ -104,9 +104,6 @@ public:
   /// setting
   bool isHidden() const;
 
-  // To get byte-aligned Eigen vectors
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
 };
 
 //==============================================================================
@@ -139,7 +136,7 @@ class DynamicsAspect final :
 {
 public:
 
-  using BaseClass = common::AspectWithVersionedProperties<
+  using Base = common::AspectWithVersionedProperties<
       DynamicsAspect, detail::DynamicsAspectProperties, ShapeFrame>;
 
   DynamicsAspect(const DynamicsAspect&) = delete;

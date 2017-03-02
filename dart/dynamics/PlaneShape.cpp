@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2013-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2013-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2013-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -45,10 +45,23 @@ PlaneShape::PlaneShape(const Eigen::Vector3d& _normal, double _offset)
 //==============================================================================
 PlaneShape::PlaneShape(const Eigen::Vector3d& _normal,
                        const Eigen::Vector3d& _point)
-  : Shape(PLANE),
+  : Shape(),
     mNormal(_normal.normalized()),
     mOffset(mNormal.dot(_point))
 {
+}
+
+//==============================================================================
+const std::string& PlaneShape::getType() const
+{
+  return getStaticType();
+}
+
+//==============================================================================
+const std::string& PlaneShape::getStaticType()
+{
+  static const std::string type("PlaneShape");
+  return type;
 }
 
 //==============================================================================

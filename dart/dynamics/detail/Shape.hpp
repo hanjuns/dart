@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2013-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2013-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
@@ -29,65 +29,21 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DART_DYNAMICS_SOFTMESHSHAPE_HPP_
-#define DART_DYNAMICS_SOFTMESHSHAPE_HPP_
+#ifndef DART_DYNAMICS_DETAIL_SHAPE_HPP_
+#define DART_DYNAMICS_DETAIL_SHAPE_HPP_
 
-#include <assimp/scene.h>
 #include "dart/dynamics/Shape.hpp"
-#include <Eigen/Dense>
 
 namespace dart {
 namespace dynamics {
 
-class SoftBodyNode;
-
-// TODO(JS): Implement
-class SoftMeshShape : public Shape
+template <typename ShapeT>
+bool Shape::is() const
 {
-public:
-
-  friend class SoftBodyNode;
-
-  /// \brief Constructor.
-  explicit SoftMeshShape(SoftBodyNode* _softBodyNode);
-
-  /// \brief Destructor.
-  virtual ~SoftMeshShape();
-
-  // Documentation inherited.
-  const std::string& getType() const override;
-
-  /// Returns shape type for this class
-  static const std::string& getStaticType();
-
-  /// \brief
-  const aiMesh* getAssimpMesh() const;
-
-  /// Get the SoftBodyNode that is associated with this SoftMeshShape
-  const SoftBodyNode* getSoftBodyNode() const;
-
-  /// \brief Update positions of the vertices using the parent soft body node.
-  void update();
-
-  // Documentation inherited.
-  Eigen::Matrix3d computeInertia(double mass) const override;
-
-protected:
-  // Documentation inherited.
-  void updateVolume() override;
-
-private:
-  /// \brief Build mesh using SoftBodyNode data
-  void _buildMesh();
-
-  /// \brief
-  SoftBodyNode* mSoftBodyNode;
-
-  /// \brief
-  std::unique_ptr<aiMesh> mAssimpMesh;
-};
+  return getType() == ShapeT::getStaticType();
+}
 
 }  // namespace dynamics
 }  // namespace dart
 
-#endif  // DART_DYNAMICS_SOFTMESHSHAPE_HPP_
+#endif  // DART_DYNAMICS_DETAIL_SHAPE_HPP_

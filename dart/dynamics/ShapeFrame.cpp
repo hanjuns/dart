@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -75,7 +75,7 @@ ShapeFrameProperties::ShapeFrameProperties(const ShapePtr& shape)
 
 //==============================================================================
 VisualAspect::VisualAspect(const PropertiesData& properties)
-  : VisualAspect::BaseClass(properties)
+  : VisualAspect::Base(properties)
 {
   // Do nothing
 }
@@ -85,9 +85,9 @@ void VisualAspect::setRGBA(const Eigen::Vector4d& color)
 {
   mProperties.mRGBA = color;
 
-  notifyPropertiesUpdate();
+  notifyPropertiesUpdated();
 
-  mComposite->getShape()->notifyColorUpdate(color);
+  mComposite->getShape()->notifyColorUpdated(color);
 }
 
 //==============================================================================
@@ -116,9 +116,9 @@ void VisualAspect::setAlpha(const double alpha)
 {
   mProperties.mRGBA[3] = alpha;
 
-  notifyPropertiesUpdate();
+  notifyPropertiesUpdated();
 
-  mComposite->getShape()->notifyAlphaUpdate(alpha);
+  mComposite->getShape()->notifyAlphaUpdated(alpha);
 }
 
 //==============================================================================
@@ -174,7 +174,7 @@ bool CollisionAspect::isCollidable() const
 //==============================================================================
 DynamicsAspect::DynamicsAspect(
     const PropertiesData& properties)
-  : BaseClass(properties)
+  : Base(properties)
 {
   // Do nothing
 }

@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2011-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2011-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2011-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -36,28 +36,32 @@
 
 #include <Eigen/Dense>
 
-#include "dart/math/Geometry.hpp"
+#include "dart/common/Deprecated.hpp"
 #include "dart/common/Subject.hpp"
+#include "dart/math/Geometry.hpp"
 #include "dart/dynamics/SmartPointer.hpp"
 
 namespace dart {
 namespace dynamics {
-/// \brief
+
 class Shape : public virtual common::Subject
 {
 public:
-  // TODO(JS): We should not use ShapeType because this is not extendable.
-  /// \brief
+
+  /// \deprecated Deprecated in 6.1. Please use getType() instead.
   enum ShapeType {
+    SPHERE,
     BOX,
     ELLIPSOID,
     CYLINDER,
+    CAPSULE,
+    CONE,
     PLANE,
+    MULTISPHERE,
     MESH,
     SOFT_MESH,
     LINE_SEGMENT,
-
-    OCTREE
+    UNSUPPORTED
   };
 
   /// DataVariance can be used by renderers to determine whether it should
@@ -73,10 +77,33 @@ public:
   };
 
   /// \brief Constructor
+  /// \deprecated Deprecated in 6.1. Please use getType() instead.
   explicit Shape(ShapeType _type);
+
+  /// \brief Constructor
+  Shape();
 
   /// \brief Destructor
   virtual ~Shape();
+
+  /// Returns a string representing the shape type
+  /// \sa is()
+  virtual const std::string& getType() const = 0;
+
+  /// Get true if the types of this Shape and the template parameter (a shape
+  /// class) are identical. This function is a syntactic sugar, which is
+  /// identical to: (getType() == ShapeType::getStaticType()).
+  ///
+  /// Example code:
+  /// \code
+  /// auto shape = bodyNode->getShapeNode(0)->getShape();
+  /// if (shape->is<BoxShape>())
+  ///   std::cout << "The shape type is box!\n";
+  /// \endcode
+  ///
+  /// \sa getType()
+  template <typename ShapeT>
+  bool is() const;
 
   /// \brief Get the bounding box of the shape in its local coordinate frame.
   ///        The dimension will be automatically determined by the sub-classes
@@ -98,7 +125,8 @@ public:
   /// \brief
   int getID() const;
 
-  /// \brief
+  /// \deprecated Deprecated in 6.1. Please use getType() instead.
+  DART_DEPRECATED(6.1)
   ShapeType getShapeType() const;
 
   /// Set the data variance of this shape. Use the DataVariance to indicate what
@@ -124,10 +152,18 @@ public:
   virtual void refreshData();
 
   /// Notify that the alpha of this shape has updated
+  DART_DEPRECATED(6.2)
   virtual void notifyAlphaUpdate(double alpha);
 
+  /// Notify that the alpha of this shape has updated
+  virtual void notifyAlphaUpdated(double alpha);
+
   /// Notify that the color (rgba) of this shape has updated
+  DART_DEPRECATED(6.2)
   virtual void notifyColorUpdate(const Eigen::Vector4d& color);
+
+  /// Notify that the color (rgba) of this shape has updated
+  virtual void notifyColorUpdated(const Eigen::Vector4d& color);
 
 protected:
 
@@ -149,14 +185,15 @@ protected:
   /// \brief
   static int mCounter;
 
-private:
-
-  /// \brief Type of primitive
+  /// \deprecated Deprecated in 6.1. Please use getType() instead.
+  /// Type of primitive shpae.
   ShapeType mType;
 
 };
 
 }  // namespace dynamics
 }  // namespace dart
+
+#include "dart/dynamics/detail/Shape.hpp"
 
 #endif  // DART_DYNAMICS_SHAPE_HPP_

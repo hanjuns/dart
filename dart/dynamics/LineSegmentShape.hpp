@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2015-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2015-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2015-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -50,6 +50,12 @@ public:
   /// Constructor for creating a simple line segment that connects two vertices
   LineSegmentShape(const Eigen::Vector3d& _v1, const Eigen::Vector3d& _v2,
                    float _thickness = 1.0f);
+
+  // Documentation inherited.
+  const std::string& getType() const override;
+
+  /// Returns shape type for this class
+  static const std::string& getStaticType();
 
   /// Set the line thickness/width for rendering
   void setThickness(float _thickness);

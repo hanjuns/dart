@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2011-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2011-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2011-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -47,6 +47,19 @@ BoxShape::BoxShape(const Eigen::Vector3d& _size)
 }
 
 BoxShape::~BoxShape() {
+}
+
+//==============================================================================
+const std::string& BoxShape::getType() const
+{
+  return getStaticType();
+}
+
+//==============================================================================
+const std::string& BoxShape::getStaticType()
+{
+  static const std::string type("BoxShape");
+  return type;
 }
 
 //==============================================================================

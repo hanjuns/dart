@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2011-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2011-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2011-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -43,9 +43,7 @@
 #include "dart/common/LocalResourceRetriever.hpp"
 #include "dart/common/Uri.hpp"
 #include "dart/dynamics/AssimpInputResourceAdaptor.hpp"
-
-
-#include <iostream>
+#include "dart/dynamics/BoxShape.hpp"
 
 #if !(ASSIMP_AISCENE_CTOR_DTOR_DEFINED)
 // We define our own constructor and destructor for aiScene, because it seems to
@@ -149,6 +147,19 @@ MeshShape::~MeshShape() {
   delete mMesh;
 }
 
+//==============================================================================
+const std::string& MeshShape::getType() const
+{
+  return getStaticType();
+}
+
+//==============================================================================
+const std::string& MeshShape::getStaticType()
+{
+  static const std::string type("MeshShape");
+  return type;
+}
+
 const aiScene* MeshShape::getMesh() const {
   return mMesh;
 }
@@ -164,16 +175,13 @@ void MeshShape::update()
 }
 
 //==============================================================================
-void MeshShape::notifyAlphaUpdate(double alpha)
+void MeshShape::notifyAlphaUpdated(double alpha)
 {
   for(std::size_t i=0; i<mMesh->mNumMeshes; ++i)
   {
     aiMesh* mesh = mMesh->mMeshes[i];
-    if(mesh && mesh->mColors[0])
-    {
-      for(std::size_t j=0; j<mesh->mNumVertices; ++j)
-        mesh->mColors[0][j][3] = alpha;
-    }
+    for(std::size_t j=0; j<mesh->mNumVertices; ++j)
+      mesh->mColors[0][j][3] = alpha;
   }
 }
 
@@ -257,19 +265,11 @@ void MeshShape::setDisplayList(int _index) {
   mDisplayList = _index;
 }
 
-Eigen::Matrix3d MeshShape::computeInertia(double _mass) const {
-  // use bounding box to represent the mesh
-  Eigen::Vector3d bounds = mBoundingBox.computeFullExtents();
-  double l = bounds.x();
-  double h = bounds.y();
-  double w = bounds.z();
-
-  Eigen::Matrix3d inertia = Eigen::Matrix3d::Identity();
-  inertia(0, 0) = _mass / 12.0 * (h * h + w * w);
-  inertia(1, 1) = _mass / 12.0 * (l * l + w * w);
-  inertia(2, 2) = _mass / 12.0 * (l * l + h * h);
-
-  return inertia;
+//==============================================================================
+Eigen::Matrix3d MeshShape::computeInertia(double _mass) const
+{
+  // Use bounding box to represent the mesh
+  return BoxShape::computeInertia(mBoundingBox.computeFullExtents(), _mass);
 }
 
 void MeshShape::updateVolume() {

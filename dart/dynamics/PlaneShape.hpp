@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2013-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2013-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2013-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -48,6 +48,12 @@ public:
   PlaneShape(const Eigen::Vector3d& _normal, const Eigen::Vector3d& _point);
 
   // Documentation inherited.
+  const std::string& getType() const override;
+
+  /// Returns shape type for this class
+  static const std::string& getStaticType();
+
+  // Documentation inherited.
   Eigen::Matrix3d computeInertia(double mass) const override;
 
   /// Set plane normal
@@ -84,10 +90,6 @@ private:
 
   /// Plane offset
   double mOffset;
-
-public:
-  // To get byte-aligned Eigen vectors
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 }  // namespace dynamics
