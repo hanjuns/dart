@@ -29,99 +29,87 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/collision/bullet/BulletCollisionGroup.hpp"
+#include "dart/dynamics/SphereShape.hpp"
 
-#include "dart/collision/CollisionObject.hpp"
-#include "dart/collision/bullet/BulletCollisionObject.hpp"
+#include "dart/math/Helpers.hpp"
 
 namespace dart {
-namespace collision {
+namespace dynamics {
 
 //==============================================================================
-BulletCollisionGroup::BulletCollisionGroup(
-    const CollisionDetectorPtr& collisionDetector)
-  : CollisionGroup(collisionDetector),
-    mBulletProadphaseAlg(new btDbvtBroadphase()),
-    mBulletCollisionConfiguration(new btDefaultCollisionConfiguration()),
-    mBulletDispatcher(
-      new btCollisionDispatcher(mBulletCollisionConfiguration.get())),
-    mBulletCollisionWorld(
-      new btCollisionWorld(mBulletDispatcher.get(),
-                           mBulletProadphaseAlg.get(),
-                           mBulletCollisionConfiguration.get()))
+SphereShape::SphereShape(double radius)
+  : Shape(SPHERE)
+{
+  setRadius(radius);
+}
+
+//==============================================================================
+SphereShape::~SphereShape()
 {
   // Do nothing
 }
 
 //==============================================================================
-void BulletCollisionGroup::initializeEngineData()
+const std::string& SphereShape::getType() const
 {
-  // Do nothing
+  return getStaticType();
 }
 
 //==============================================================================
-void BulletCollisionGroup::addCollisionObjectToEngine(CollisionObject* object)
+const std::string& SphereShape::getStaticType()
 {
-  auto casted = static_cast<BulletCollisionObject*>(object);
-
-  mBulletCollisionWorld->addCollisionObject(casted->getBulletCollisionObject());
-
-  initializeEngineData();
+  static const std::string type("SphereShape");
+  return type;
 }
 
 //==============================================================================
-void BulletCollisionGroup::addCollisionObjectsToEngine(
-    const std::vector<CollisionObject*>& collObjects)
+void SphereShape::setRadius(double radius)
 {
-  for (auto collObj : collObjects)
-  {
-    auto casted = static_cast<BulletCollisionObject*>(collObj);
+  assert(radius > 0.0);
 
-    mBulletCollisionWorld->addCollisionObject(
-          casted->getBulletCollisionObject());
-  }
+  mRadius = radius;
 
-  initializeEngineData();
+  mBoundingBox.setMin(Eigen::Vector3d::Constant(-radius));
+  mBoundingBox.setMax(Eigen::Vector3d::Constant(radius));
+
+  updateVolume();
 }
 
 //==============================================================================
-void BulletCollisionGroup::removeCollisionObjectFromEngine(
-    CollisionObject* object)
+double SphereShape::getRadius() const
 {
-  auto casted = static_cast<BulletCollisionObject*>(object);
-
-  mBulletCollisionWorld->removeCollisionObject(
-        casted->getBulletCollisionObject());
-
-  initializeEngineData();
+  return mRadius;
 }
 
 //==============================================================================
-void BulletCollisionGroup::removeAllCollisionObjectsFromEngine()
+double SphereShape::computeVolume(double radius)
 {
-  for (const auto& pair : mShapeFrameMap)
-    removeCollisionObjectFromEngine(pair.second.get());
-
-  initializeEngineData();
+  return math::constantsd::pi() * 4.0 / 3.0 * std::pow(radius, 3) ;
 }
 
 //==============================================================================
-void BulletCollisionGroup::updateCollisionGroupEngineData()
+Eigen::Matrix3d SphereShape::computeInertia(double radius, double mass)
 {
-  mBulletCollisionWorld->updateAabbs();
+  Eigen::Matrix3d inertia = Eigen::Matrix3d::Identity();
+
+  inertia(0, 0) = 2.0 / 5.0 * mass * std::pow(radius, 2);
+  inertia(1, 1) = inertia(0, 0);
+  inertia(2, 2) = inertia(0, 0);
+
+  return inertia;
 }
 
 //==============================================================================
-btCollisionWorld* BulletCollisionGroup::getBulletCollisionWorld()
+Eigen::Matrix3d SphereShape::computeInertia(double mass) const
 {
-  return mBulletCollisionWorld.get();
+  return computeInertia(mRadius, mass);
 }
 
 //==============================================================================
-const btCollisionWorld* BulletCollisionGroup::getBulletCollisionWorld() const
+void SphereShape::updateVolume()
 {
-  return mBulletCollisionWorld.get();
+  mVolume = computeVolume(mRadius);
 }
 
-}  // namespace collision
+}  // namespace dynamics
 }  // namespace dart

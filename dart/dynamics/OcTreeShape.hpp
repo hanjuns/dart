@@ -65,6 +65,12 @@ public:
   explicit OcTreeShape(const std::string& filename);
 
   // Documentation inherited
+  const std::string& getType() const override;
+
+  /// Returns shape type for this class
+  static const std::string& getStaticType();
+
+  // Documentation inherited
   Eigen::Matrix3d computeInertia(double mass) const override;
 
   // Documentation inherited

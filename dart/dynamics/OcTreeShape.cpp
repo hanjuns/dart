@@ -39,7 +39,7 @@ OcTreeShape::OcTreeShape(
     const double resolution,
     const double occupancyThreshold,
     const std::vector<Eigen::Vector3d>& occupiedPoints)
-  : Shape(OCTREE),
+  : Shape(UNSUPPORTED),
     octomap::OcTree(resolution)
 {
   for(const Eigen::Vector3d& p : occupiedPoints)
@@ -54,7 +54,7 @@ OcTreeShape::OcTreeShape(
     const double resolution,
     const double occupancyThreshold,
     const std::vector<std::pair<Eigen::Vector3d, float> >& probablePoints)
-  : Shape(OCTREE),
+  : Shape(UNSUPPORTED),
     octomap::OcTree(resolution)
 {
   for(const std::pair<Eigen::Vector3d, float>& entry : probablePoints)
@@ -70,10 +70,23 @@ OcTreeShape::OcTreeShape(
 
 //==============================================================================
 OcTreeShape::OcTreeShape(const std::string& filename)
-  : Shape(OCTREE),
+  : Shape(UNSUPPORTED),
     octomap::OcTree(filename)
 {
   // Do nothing
+}
+
+//==============================================================================
+const std::string& OcTreeShape::getType() const
+{
+  return getStaticType();
+}
+
+//==============================================================================
+const std::string& OcTreeShape::getStaticType()
+{
+  static const std::string type("OcTreeShape");
+  return type;
 }
 
 //==============================================================================

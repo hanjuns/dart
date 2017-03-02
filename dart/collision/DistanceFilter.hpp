@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -29,22 +29,35 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dart/collision/Option.hpp"
+#ifndef DART_COLLISION_DISTANCEFILTER_HPP_
+#define DART_COLLISION_DISTANCEFILTER_HPP_
 
 namespace dart {
+
+namespace dynamics {
+class BodyNode;
+}  // namespace dynamics
+
 namespace collision {
 
-//==============================================================================
-CollisionOption::CollisionOption(
-    bool enableContact,
-    std::size_t maxNumContacts,
-    const std::shared_ptr<CollisionFilter>& collisionFilter)
-  : enableContact(enableContact),
-    maxNumContacts(maxNumContacts),
-    collisionFilter(collisionFilter)
+class CollisionObject;
+
+struct DistanceFilter
 {
-  // Do nothing
-}
+  virtual bool needDistance(const CollisionObject* object1,
+                             const CollisionObject* object2) const = 0;
+};
+
+struct BodyNodeDistanceFilter : DistanceFilter
+{
+  bool needDistance(const CollisionObject* object1,
+                    const CollisionObject* object2) const override;
+
+  bool areAdjacentBodies(const dynamics::BodyNode* bodyNode1,
+                         const dynamics::BodyNode* bodyNode2) const;
+};
 
 }  // namespace collision
 }  // namespace dart
+
+#endif  // DART_COLLISION_DISTANCEFILTER_HPP_

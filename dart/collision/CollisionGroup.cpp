@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -169,11 +169,27 @@ bool CollisionGroup::collide(
 
 //==============================================================================
 bool CollisionGroup::collide(
-    CollisionGroup* other,
+    CollisionGroup* otherGroup,
     const CollisionOption& option,
     CollisionResult* result)
 {
-  return mCollisionDetector->collide(this, other, option, result);
+  return mCollisionDetector->collide(this, otherGroup, option, result);
+}
+
+//==============================================================================
+double CollisionGroup::distance(
+    const DistanceOption& option, DistanceResult* result)
+{
+  return mCollisionDetector->distance(this, option, result);
+}
+
+//==============================================================================
+double CollisionGroup::distance(
+    CollisionGroup* otherGroup,
+    const DistanceOption& option,
+    DistanceResult* result)
+{
+  return mCollisionDetector->distance(this, otherGroup, option, result);
 }
 
 //==============================================================================

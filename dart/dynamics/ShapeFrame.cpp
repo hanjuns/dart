@@ -85,7 +85,7 @@ void VisualAspect::setRGBA(const Eigen::Vector4d& color)
 {
   mProperties.mRGBA = color;
 
-  notifyPropertiesUpdated();
+  notifyPropertiesUpdate();
 
   mComposite->getShape()->notifyColorUpdated(color);
 }
@@ -116,7 +116,7 @@ void VisualAspect::setAlpha(const double alpha)
 {
   mProperties.mRGBA[3] = alpha;
 
-  notifyPropertiesUpdated();
+  notifyPropertiesUpdate();
 
   mComposite->getShape()->notifyAlphaUpdated(alpha);
 }

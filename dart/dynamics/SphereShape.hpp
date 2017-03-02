@@ -29,61 +29,54 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DART_COLLISION_BULLET_BULLETCOLLISIONOBJECT_HPP_
-#define DART_COLLISION_BULLET_BULLETCOLLISIONOBJECT_HPP_
+#ifndef DART_DYNAMICS_SPHERESHAPE_HPP_
+#define DART_DYNAMICS_SPHERESHAPE_HPP_
 
-// Must be included before any Bullet headers.
-#include "dart/config.hpp"
-
-#include <btBulletCollisionCommon.h>
-
-#include "dart/collision/CollisionObject.hpp"
+#include "dart/dynamics/Shape.hpp"
 
 namespace dart {
-namespace collision {
+namespace dynamics {
 
-class CollisionObject;
-
-class BulletCollisionObject : public CollisionObject
+class SphereShape : public Shape
 {
 public:
+  /// Constructor.
+  explicit SphereShape(double radius);
 
-  struct UserData
-  {
-    CollisionObject* collisionObject;
+  /// Destructor.
+  virtual ~SphereShape();
 
-    UserData(CollisionObject* collisionObject);
-  };
+  // Documentation inherited.
+  const std::string& getType() const override;
 
-  friend class BulletCollisionDetector;
+  /// Returns shape type for this class
+  static const std::string& getStaticType();
 
-  /// Return Bullet collision object
-  btCollisionObject* getBulletCollisionObject();
+  /// Set radius of this box.
+  void setRadius(double radius);
 
-  /// Return Bullet collision object
-  const btCollisionObject* getBulletCollisionObject() const;
+  /// Get radius of this box.
+  double getRadius() const;
+
+  /// Compute volume from given properties
+  static double computeVolume(double radius);
+
+  /// Compute moments of inertia of a Sphere
+  static Eigen::Matrix3d computeInertia(double radius, double mass);
+
+  // Documentation inherited.
+  Eigen::Matrix3d computeInertia(double mass) const override;
 
 protected:
+  // Documentation inherited.
+  void updateVolume() override;
 
-  /// Constructor
-  BulletCollisionObject(CollisionDetector* collisionDetector,
-                        const dynamics::ShapeFrame* shapeFrame,
-                        btCollisionShape* bulletCollisionShape);
-
-  // Documentation inherited
-  void updateEngineData() override;
-
-protected:
-
-  /// Bullet collision geometry user data
-  std::unique_ptr<UserData> mBulletCollisionObjectUserData;
-
-  /// Bullet collision object
-  std::unique_ptr<btCollisionObject> mBulletCollisionObject;
-
+private:
+  /// Radius of this Sphere
+  double mRadius;
 };
 
-}  // namespace collision
+}  // namespace dynamics
 }  // namespace dart
 
-#endif  // DART_COLLISION_BULLET_BULLETCOLLISIONOBJECT_HPP_
+#endif  // DART_DYNAMICS_SPHERESHAPE_HPP_

@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2014-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2014-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2014-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -44,10 +44,14 @@
 #include "dart/collision/bullet/BulletCollisionGroup.hpp"
 #include "dart/dynamics/ShapeFrame.hpp"
 #include "dart/dynamics/Shape.hpp"
+#include "dart/dynamics/SphereShape.hpp"
 #include "dart/dynamics/BoxShape.hpp"
 #include "dart/dynamics/EllipsoidShape.hpp"
 #include "dart/dynamics/CylinderShape.hpp"
+#include "dart/dynamics/CapsuleShape.hpp"
+#include "dart/dynamics/ConeShape.hpp"
 #include "dart/dynamics/PlaneShape.hpp"
+#include "dart/dynamics/MultiSphereShape.hpp"
 #include "dart/dynamics/MeshShape.hpp"
 #include "dart/dynamics/SoftMeshShape.hpp"
 
@@ -280,12 +284,12 @@ bool BulletCollisionDetector::collide(
   if (!checkGroupValidity(this, group2))
     return false;
 
-//  dtwarn << "[BulletCollisionDetector::collide] collide(group1, group2) "
-//         << "supposed to check collisions of the objects in group1 against the "
-//         << "objects in group2. However, the current implementation of this "
-//         << "function checks for all the objects against each other of both "
-//         << "group1 and group2, which is an incorrect behavior. This bug will "
-//         << "be fixed in the next patch release. (see #717 for the details)\n";
+  dtwarn << "[BulletCollisionDetector::collide] collide(group1, group2) "
+         << "supposed to check collisions of the objects in group1 against the "
+         << "objects in group2. However, the current implementation of this "
+         << "function checks for all the objects against each other of both "
+         << "group1 and group2, which is an incorrect behavior. This bug will "
+         << "be fixed in the next patch release. (see #717 for the details)\n";
 
   mGroupForFiltering.reset(new BulletCollisionGroup(shared_from_this()));
   auto bulletCollisionWorld = mGroupForFiltering->getBulletCollisionWorld();
@@ -308,6 +312,31 @@ bool BulletCollisionDetector::collide(
   {
     return isCollision(bulletCollisionWorld);
   }
+}
+
+//==============================================================================
+double BulletCollisionDetector::distance(
+    CollisionGroup* /*group*/,
+    const DistanceOption& /*option*/,
+    DistanceResult* /*result*/)
+{
+  dtwarn << "[BulletCollisionDetector::distance] This collision detector does "
+         << "not support (signed) distance queries. Returning 0.0.\n";
+
+  return 0.0;
+}
+
+//==============================================================================
+double BulletCollisionDetector::distance(
+    CollisionGroup* /*group1*/,
+    CollisionGroup* /*group2*/,
+    const DistanceOption& /*option*/,
+    DistanceResult* /*result*/)
+{
+  dtwarn << "[BulletCollisionDetector::distance] This collision detector does "
+         << "not support (signed) distance queries. Returning.\n";
+
+  return 0.0;
 }
 
 //==============================================================================
@@ -391,107 +420,142 @@ btCollisionShape* BulletCollisionDetector::createBulletCollisionShape(
     const dynamics::ConstShapePtr& shape)
 {
   using dynamics::Shape;
+  using dynamics::SphereShape;
   using dynamics::BoxShape;
   using dynamics::EllipsoidShape;
   using dynamics::CylinderShape;
+  using dynamics::CapsuleShape;
+  using dynamics::ConeShape;
   using dynamics::PlaneShape;
+  using dynamics::MultiSphereShape;
   using dynamics::MeshShape;
   using dynamics::SoftMeshShape;
 
   btCollisionShape* bulletCollisionShape = nullptr;
 
-  switch (shape->getShapeType())
+  if (shape->is<SphereShape>())
   {
-    case Shape::BOX:
+    assert(dynamic_cast<const SphereShape*>(shape.get()));
+
+    const auto sphere = static_cast<const SphereShape*>(shape.get());
+    const auto radius = sphere->getRadius();
+
+    bulletCollisionShape = new btSphereShape(radius);
+  }
+  else if (shape->is<BoxShape>())
+  {
+    assert(dynamic_cast<const BoxShape*>(shape.get()));
+
+    const auto box = static_cast<const BoxShape*>(shape.get());
+    const Eigen::Vector3d& size = box->getSize();
+
+    bulletCollisionShape = new btBoxShape(convertVector3(size*0.5));
+  }
+  else if (shape->is<EllipsoidShape>())
+  {
+    assert(dynamic_cast<const EllipsoidShape*>(shape.get()));
+
+    const auto ellipsoid = static_cast<const EllipsoidShape*>(shape.get());
+    const Eigen::Vector3d& radii = ellipsoid->getRadii();
+
+    bulletCollisionShape = createBulletEllipsoidMesh(
+          radii[0]*2.0, radii[1]*2.0, radii[2]*2.0);
+  }
+  else if (shape->is<CylinderShape>())
+  {
+    assert(dynamic_cast<const CylinderShape*>(shape.get()));
+
+    const auto cylinder = static_cast<const CylinderShape*>(shape.get());
+    const auto radius = cylinder->getRadius();
+    const auto height = cylinder->getHeight();
+    const auto size = btVector3(radius, radius, height * 0.5);
+
+    bulletCollisionShape = new btCylinderShapeZ(size);
+  }
+  else if (shape->is<CapsuleShape>())
+  {
+    assert(dynamic_cast<const CapsuleShape*>(shape.get()));
+
+    const auto capsule = static_cast<const CapsuleShape*>(shape.get());
+    const auto radius = capsule->getRadius();
+    const auto height = capsule->getHeight();
+
+    bulletCollisionShape = new btCapsuleShapeZ(radius, height);
+  }
+  else if (shape->is<ConeShape>())
+  {
+    assert(dynamic_cast<const ConeShape*>(shape.get()));
+
+    const auto cone = static_cast<const ConeShape*>(shape.get());
+    const auto radius = cone->getRadius();
+    const auto height = cone->getHeight();
+
+    bulletCollisionShape = new btConeShapeZ(radius, height);
+    bulletCollisionShape->setMargin(0.0);
+    // TODO(JS): Bullet seems to use constant margin 0.4, however this could be
+    // dangerous when the cone is sufficiently small. We use zero margin here
+    // until find better solution even using zero margin is not recommended:
+    // https://www.sjbaker.org/wiki/index.php?title=Physics_-_Bullet_Collected_random_advice#Minimum_object_sizes_-_by_Erwin
+  }
+  else if (shape->is<PlaneShape>())
+  {
+    assert(dynamic_cast<const PlaneShape*>(shape.get()));
+
+    const auto plane = static_cast<const PlaneShape*>(shape.get());
+    const Eigen::Vector3d normal = plane->getNormal();
+    const double offset = plane->getOffset();
+
+    bulletCollisionShape = new btStaticPlaneShape(
+          convertVector3(normal), offset);
+  }
+  else if (shape->is<MultiSphereShape>())
+  {
+    assert(dynamic_cast<const MultiSphereShape*>(shape.get()));
+
+    const auto multiSphere = static_cast<const MultiSphereShape*>(shape.get());
+    const auto numSpheres = multiSphere->getNumSpheres();
+    const auto& spheres = multiSphere->getSpheres();
+
+    std::vector<btVector3> bulletPositions(numSpheres);
+    std::vector<btScalar> bulletRadii(numSpheres);
+
+    for (auto i = 0u; i < numSpheres; ++i)
     {
-      assert(dynamic_cast<const BoxShape*>(shape.get()));
-
-      const auto box = static_cast<const BoxShape*>(shape.get());
-      const Eigen::Vector3d& size = box->getSize();
-
-      bulletCollisionShape = new btBoxShape(convertVector3(size*0.5));
-
-      break;
+      bulletRadii[i] = static_cast<btScalar>(spheres[i].first);
+      bulletPositions[i] = convertVector3(spheres[i].second);
     }
-    case Shape::ELLIPSOID:
-    {
-      assert(dynamic_cast<const EllipsoidShape*>(shape.get()));
 
-      const auto ellipsoid = static_cast<const EllipsoidShape*>(shape.get());
-      const Eigen::Vector3d& size = ellipsoid->getSize();
+    bulletCollisionShape = new btMultiSphereShape(
+          bulletPositions.data(), bulletRadii.data(), numSpheres);
+  }
+  else if (shape->is<MeshShape>())
+  {
+    assert(dynamic_cast<const MeshShape*>(shape.get()));
 
-      if (ellipsoid->isSphere())
-      {
-        bulletCollisionShape = new btSphereShape(size[0] * 0.5);
-      }
-      else
-      {
-        bulletCollisionShape = createBulletEllipsoidMesh(
-              size[0], size[1], size[2]);
-      }
+    const auto shapeMesh = static_cast<const MeshShape*>(shape.get());
+    const auto scale = shapeMesh->getScale();
+    const auto mesh = shapeMesh->getMesh();
 
-      break;
-    }
-    case Shape::CYLINDER:
-    {
-      assert(dynamic_cast<const CylinderShape*>(shape.get()));
+    bulletCollisionShape = createBulletCollisionShapeFromAssimpScene(
+          scale, mesh);
+  }
+  else if (shape->is<SoftMeshShape>())
+  {
+    assert(dynamic_cast<const SoftMeshShape*>(shape.get()));
 
-      const auto cylinder = static_cast<const CylinderShape*>(shape.get());
-      const auto radius = cylinder->getRadius();
-      const auto height = cylinder->getHeight();
-      const auto size = btVector3(radius, radius, height * 0.5);
+    const auto softMeshShape = static_cast<const SoftMeshShape*>(shape.get());
+    const auto mesh = softMeshShape->getAssimpMesh();
 
-      bulletCollisionShape = new btCylinderShapeZ(size);
+    bulletCollisionShape = createBulletCollisionShapeFromAssimpMesh(mesh);
+  }
+  else
+  {
+    dterr << "[BulletCollisionDetector::createBulletCollisionShape] "
+          << "Attempting to create an unsupported shape type ["
+          << shape->getType() << "] Creating a sphere with 0.1 radius "
+          << "instead.\n";
 
-      break;
-    }
-    case Shape::PLANE:
-    {
-      assert(dynamic_cast<const PlaneShape*>(shape.get()));
-
-      const auto plane = static_cast<const PlaneShape*>(shape.get());
-      const Eigen::Vector3d normal = plane->getNormal();
-      const double offset = plane->getOffset();
-
-      bulletCollisionShape = new btStaticPlaneShape(
-            convertVector3(normal), offset);
-
-      break;
-    }
-    case Shape::MESH:
-    {
-      assert(dynamic_cast<const MeshShape*>(shape.get()));
-
-      const auto shapeMesh = static_cast<const MeshShape*>(shape.get());
-      const auto scale = shapeMesh->getScale();
-      const auto mesh = shapeMesh->getMesh();
-
-      bulletCollisionShape = createBulletCollisionShapeFromAssimpScene(
-            scale, mesh);
-
-      break;
-    }
-    case Shape::SOFT_MESH:
-    {
-      assert(dynamic_cast<const SoftMeshShape*>(shape.get()));
-
-      const auto softMeshShape = static_cast<const SoftMeshShape*>(shape.get());
-      const auto mesh = softMeshShape->getAssimpMesh();
-
-      bulletCollisionShape = createBulletCollisionShapeFromAssimpMesh(mesh);
-
-      break;
-    }
-    default:
-    {
-      dterr << "[BulletCollisionObjectData::init] "
-            << "Attempting to create unsupported shape type '"
-            << shape->getShapeType() << "'.\n";
-
-      bulletCollisionShape = new btSphereShape(0.1);
-
-      break;
-    }
+    bulletCollisionShape = new btSphereShape(0.1);
   }
 
   return bulletCollisionShape;
@@ -512,7 +576,7 @@ Contact convertContact(const btManifoldPoint& bulletManifoldPoint,
   Contact contact;
 
   contact.point = convertVector3(bulletManifoldPoint.getPositionWorldOnA());
-  contact.normal = convertVector3(-bulletManifoldPoint.m_normalWorldOnB);
+  contact.normal = convertVector3(bulletManifoldPoint.m_normalWorldOnB);
   contact.penetrationDepth = -bulletManifoldPoint.m_distance1;
   contact.collisionObject1 = userData1->collisionObject;
   contact.collisionObject2 = userData2->collisionObject;

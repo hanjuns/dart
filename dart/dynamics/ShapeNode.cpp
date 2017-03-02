@@ -81,8 +81,8 @@ void ShapeNode::setRelativeTransform(const Eigen::Isometry3d& transform)
   const Eigen::Isometry3d oldTransform = getRelativeTransform();
 
   FixedFrame::setRelativeTransform(transform);
-  dirtyJacobian();
-  dirtyJacobianDeriv();
+  notifyJacobianUpdate();
+  notifyJacobianDerivUpdate();
 
   mRelativeTransformUpdatedSignal.raise(
         this, oldTransform, getRelativeTransform());

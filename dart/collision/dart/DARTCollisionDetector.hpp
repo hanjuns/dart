@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2013-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2013-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2013-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -70,6 +70,19 @@ public:
       CollisionGroup* group2,
       const CollisionOption& option = CollisionOption(false, 1u, nullptr),
       CollisionResult* result = nullptr) override;
+
+  // Documentation inherited
+  double distance(
+      CollisionGroup* group,
+      const DistanceOption& option = DistanceOption(false, 0.0, nullptr),
+      DistanceResult* result = nullptr) override;
+
+  // Documentation inherited
+  double distance(
+      CollisionGroup* group1,
+      CollisionGroup* group2,
+      const DistanceOption& option = DistanceOption(false, 0.0, nullptr),
+      DistanceResult* result = nullptr) override;
 
 protected:
 
