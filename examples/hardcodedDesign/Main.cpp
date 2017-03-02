@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2013-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2013-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2013-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -39,9 +39,9 @@
  * direction.
  */
 
-#include "dart/dart.hpp"
+#include <dart/dart.hpp>
 
-#include "examples/hardcodedDesign/MyWindow.hpp"
+#include "MyWindow.hpp"
 
 int main(int argc, char* argv[]) {
   // Create Left Leg skeleton
@@ -59,8 +59,8 @@ int main(int argc, char* argv[]) {
   dart::dynamics::RevoluteJoint::Properties joint;
   joint.mName = "LHY";
   joint.mAxis = Eigen::Vector3d(0.0, 0.0, 1.0);
-  joint.mPositionLowerLimit = -dart::math::constantsd::pi();
-  joint.mPositionUpperLimit =  dart::math::constantsd::pi();
+  joint.mPositionLowerLimits[0] = -dart::math::constantsd::pi();
+  joint.mPositionUpperLimits[0] =  dart::math::constantsd::pi();
 
   // You can get the newly created Joint and BodyNode pointers like this
   std::pair<dart::dynamics::Joint*, dart::dynamics::BodyNode*> pair =
