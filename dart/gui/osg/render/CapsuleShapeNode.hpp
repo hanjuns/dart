@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2015-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2015-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
@@ -29,8 +29,8 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DART_GUI_OSG_RENDER_BOXSHAPENODE_HPP_
-#define DART_GUI_OSG_RENDER_BOXSHAPENODE_HPP_
+#ifndef DART_GUI_OSG_RENDER_CAPSULESHAPENODE_HPP_
+#define DART_GUI_OSG_RENDER_CAPSULESHAPENODE_HPP_
 
 #include <osg/MatrixTransform>
 
@@ -39,32 +39,32 @@
 namespace dart {
 
 namespace dynamics {
-class BoxShape;
+class CapsuleShape;
 } // namespace dynamics
 
 namespace gui {
 namespace osg {
 namespace render {
 
-class BoxShapeGeode;
-class BoxShapeDrawable;
+class CapsuleShapeGeode;
+class CapsuleShapeDrawable;
 
-class BoxShapeNode : public ShapeNode, public ::osg::Group
+class CapsuleShapeNode : public ShapeNode, public ::osg::Group
 {
 public:
 
-  BoxShapeNode(std::shared_ptr<dart::dynamics::BoxShape> shape,
-               ShapeFrameNode* parent);
+  CapsuleShapeNode(std::shared_ptr<dart::dynamics::CapsuleShape> shape,
+                   ShapeFrameNode* parent);
 
   void refresh();
   void extractData(bool firstTime);
 
 protected:
 
-  virtual ~BoxShapeNode();
+  virtual ~CapsuleShapeNode();
 
-  std::shared_ptr<dart::dynamics::BoxShape> mBoxShape;
-  BoxShapeGeode* mGeode;
+  std::shared_ptr<dart::dynamics::CapsuleShape> mCapsuleShape;
+  CapsuleShapeGeode* mGeode;
 
 };
 
@@ -73,4 +73,4 @@ protected:
 } // namespace gui
 } // namespace dart
 
-#endif // DART_GUI_OSG_RENDER_BOXSHAPENODE_HPP_
+#endif // DART_GUI_OSG_RENDER_CAPSULESHAPENODE_HPP_

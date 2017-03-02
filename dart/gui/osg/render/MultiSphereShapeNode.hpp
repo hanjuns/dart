@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2015-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2015-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
@@ -29,9 +29,10 @@
  *   POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DART_GUI_OSG_RENDER_BOXSHAPENODE_HPP_
-#define DART_GUI_OSG_RENDER_BOXSHAPENODE_HPP_
+#ifndef DART_GUI_OSG_RENDER_MULTISPHERESHAPENODE_HPP_
+#define DART_GUI_OSG_RENDER_MULTISPHERESHAPENODE_HPP_
 
+#include <osg/ShapeDrawable>
 #include <osg/MatrixTransform>
 
 #include "dart/gui/osg/render/ShapeNode.hpp"
@@ -39,32 +40,33 @@
 namespace dart {
 
 namespace dynamics {
-class BoxShape;
+class MultiSphereShape;
 } // namespace dynamics
 
 namespace gui {
 namespace osg {
 namespace render {
 
-class BoxShapeGeode;
-class BoxShapeDrawable;
+class MultiSphereShapeGeode;
+class MultiSphereShapeDrawable;
 
-class BoxShapeNode : public ShapeNode, public ::osg::Group
+class MultiSphereShapeNode : public ShapeNode, public ::osg::MatrixTransform
 {
 public:
 
-  BoxShapeNode(std::shared_ptr<dart::dynamics::BoxShape> shape,
-               ShapeFrameNode* parent);
+  MultiSphereShapeNode(
+      std::shared_ptr<dart::dynamics::MultiSphereShape> shape,
+      ShapeFrameNode* parent);
 
   void refresh();
   void extractData(bool firstTime);
 
 protected:
 
-  virtual ~BoxShapeNode();
+  virtual ~MultiSphereShapeNode();
 
-  std::shared_ptr<dart::dynamics::BoxShape> mBoxShape;
-  BoxShapeGeode* mGeode;
+  std::shared_ptr<dart::dynamics::MultiSphereShape> mMultiSphereShape;
+  MultiSphereShapeGeode* mGeode;
 
 };
 
@@ -73,4 +75,4 @@ protected:
 } // namespace gui
 } // namespace dart
 
-#endif // DART_GUI_OSG_RENDER_BOXSHAPENODE_HPP_
+#endif // DART_GUI_OSG_RENDER_MULTISPHERESHAPENODE_HPP_

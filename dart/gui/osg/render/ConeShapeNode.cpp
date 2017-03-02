@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2015-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2015-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
@@ -32,10 +32,10 @@
 #include <osg/Geode>
 #include <osg/ShapeDrawable>
 
-#include "dart/gui/osg/render/BoxShapeNode.hpp"
+#include "dart/gui/osg/render/ConeShapeNode.hpp"
 #include "dart/gui/osg/Utils.hpp"
 
-#include "dart/dynamics/BoxShape.hpp"
+#include "dart/dynamics/ConeShape.hpp"
 #include "dart/dynamics/SimpleFrame.hpp"
 
 namespace dart {
@@ -43,49 +43,55 @@ namespace gui {
 namespace osg {
 namespace render {
 
-class BoxShapeGeode : public ShapeNode, public ::osg::Geode
+//==============================================================================
+class ConeShapeGeode : public ShapeNode, public ::osg::Geode
 {
 public:
 
-  BoxShapeGeode(const std::shared_ptr<dart::dynamics::BoxShape>& shape,
-                ShapeFrameNode* parentShapeFrame);
+  ConeShapeGeode(dart::dynamics::ConeShape* shape,
+                 ShapeFrameNode* parent,
+                 ConeShapeNode* parentNode);
 
   void refresh();
   void extractData();
 
 protected:
 
-  virtual ~BoxShapeGeode();
+  virtual ~ConeShapeGeode();
 
-  std::shared_ptr<dart::dynamics::BoxShape> mBoxShape;
-  BoxShapeDrawable* mDrawable;
+  dart::dynamics::ConeShape* mConeShape;
+  ConeShapeDrawable* mDrawable;
 
 };
 
 //==============================================================================
-class BoxShapeDrawable : public ::osg::ShapeDrawable
+class ConeShapeDrawable : public ::osg::ShapeDrawable
 {
 public:
 
-  BoxShapeDrawable(dart::dynamics::BoxShape* shape,
-                   dart::dynamics::VisualAspect* visualAspect);
+  ConeShapeDrawable(dart::dynamics::ConeShape* shape,
+                    dart::dynamics::VisualAspect* visualAspect,
+                    ConeShapeGeode* parent);
 
   void refresh(bool firstTime);
 
 protected:
 
-  virtual ~BoxShapeDrawable();
+  virtual ~ConeShapeDrawable();
 
-  dart::dynamics::BoxShape* mBoxShape;
+  dart::dynamics::ConeShape* mConeShape;
   dart::dynamics::VisualAspect* mVisualAspect;
+
+  ConeShapeGeode* mParent;
 
 };
 
 //==============================================================================
-BoxShapeNode::BoxShapeNode(std::shared_ptr<dart::dynamics::BoxShape> shape,
-                           ShapeFrameNode* parent)
+ConeShapeNode::ConeShapeNode(
+    std::shared_ptr<dart::dynamics::ConeShape> shape,
+    ShapeFrameNode* parent)
   : ShapeNode(shape, parent, this),
-    mBoxShape(shape),
+    mConeShape(shape),
     mGeode(nullptr)
 {
   extractData(true);
@@ -93,7 +99,7 @@ BoxShapeNode::BoxShapeNode(std::shared_ptr<dart::dynamics::BoxShape> shape,
 }
 
 //==============================================================================
-void BoxShapeNode::refresh()
+void ConeShapeNode::refresh()
 {
   mUtilized = true;
 
@@ -106,11 +112,11 @@ void BoxShapeNode::refresh()
 }
 
 //==============================================================================
-void BoxShapeNode::extractData(bool /*firstTime*/)
+void ConeShapeNode::extractData(bool /*firstTime*/)
 {
   if(nullptr == mGeode)
   {
-    mGeode = new BoxShapeGeode(mBoxShape, mParentShapeFrameNode);
+    mGeode = new ConeShapeGeode(mConeShape.get(), mParentShapeFrameNode, this);
     addChild(mGeode);
     return;
   }
@@ -119,17 +125,18 @@ void BoxShapeNode::extractData(bool /*firstTime*/)
 }
 
 //==============================================================================
-BoxShapeNode::~BoxShapeNode()
+ConeShapeNode::~ConeShapeNode()
 {
   // Do nothing
 }
 
 //==============================================================================
-BoxShapeGeode::BoxShapeGeode(
-    const std::shared_ptr<dart::dynamics::BoxShape>& shape,
-    ShapeFrameNode* parentShapeFrame)
-  : ShapeNode(shape, parentShapeFrame, this),
-    mBoxShape(shape),
+ConeShapeGeode::ConeShapeGeode(
+    dart::dynamics::ConeShape* shape,
+    ShapeFrameNode* parent,
+    ConeShapeNode* parentNode)
+  : ShapeNode(parentNode->getShape(), parent, this),
+    mConeShape(shape),
     mDrawable(nullptr)
 {
   getOrCreateStateSet()->setMode(GL_BLEND, ::osg::StateAttribute::ON);
@@ -137,7 +144,7 @@ BoxShapeGeode::BoxShapeGeode(
 }
 
 //==============================================================================
-void BoxShapeGeode::refresh()
+void ConeShapeGeode::refresh()
 {
   mUtilized = true;
 
@@ -145,11 +152,11 @@ void BoxShapeGeode::refresh()
 }
 
 //==============================================================================
-void BoxShapeGeode::extractData()
+void ConeShapeGeode::extractData()
 {
   if(nullptr == mDrawable)
   {
-    mDrawable = new BoxShapeDrawable(mBoxShape.get(), mVisualAspect);
+    mDrawable = new ConeShapeDrawable(mConeShape, mVisualAspect, this);
     addDrawable(mDrawable);
     return;
   }
@@ -158,39 +165,43 @@ void BoxShapeGeode::extractData()
 }
 
 //==============================================================================
-BoxShapeGeode::~BoxShapeGeode()
+ConeShapeGeode::~ConeShapeGeode()
 {
   // Do nothing
 }
 
 //==============================================================================
-BoxShapeDrawable::BoxShapeDrawable(dart::dynamics::BoxShape* shape,
-                                   dart::dynamics::VisualAspect* visualAspect)
-  : mBoxShape(shape),
-    mVisualAspect(visualAspect)
+ConeShapeDrawable::ConeShapeDrawable(
+    dart::dynamics::ConeShape* shape,
+    dart::dynamics::VisualAspect* visualAspect,
+    ConeShapeGeode* parent)
+  : mConeShape(shape),
+    mVisualAspect(visualAspect),
+    mParent(parent)
 {
   refresh(true);
 }
 
 //==============================================================================
-void BoxShapeDrawable::refresh(bool firstTime)
+void ConeShapeDrawable::refresh(bool firstTime)
 {
-  if(mBoxShape->getDataVariance() == dart::dynamics::Shape::STATIC)
+  if(mConeShape->getDataVariance() == dart::dynamics::Shape::STATIC)
     setDataVariance(::osg::Object::STATIC);
   else
     setDataVariance(::osg::Object::DYNAMIC);
 
-  if(mBoxShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_PRIMITIVE)
+  if(mConeShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_PRIMITIVE)
      || firstTime)
   {
-    const Eigen::Vector3d& d = mBoxShape->getSize();
-    ::osg::ref_ptr<::osg::Box> osg_shape = new ::osg::Box(::osg::Vec3(0,0,0),
-                                                    d[0], d[1], d[2]);
+    double R = mConeShape->getRadius();
+    double h = mConeShape->getHeight();
+    ::osg::ref_ptr<::osg::Cone> osg_shape =
+        new ::osg::Cone(::osg::Vec3(0,0,0), R, h);
     setShape(osg_shape);
     dirtyDisplayList();
   }
 
-  if(mBoxShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_COLOR)
+  if(mConeShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_COLOR)
      || firstTime)
   {
     setColor(eigToOsgVec4(mVisualAspect->getRGBA()));
@@ -198,7 +209,7 @@ void BoxShapeDrawable::refresh(bool firstTime)
 }
 
 //==============================================================================
-BoxShapeDrawable::~BoxShapeDrawable()
+ConeShapeDrawable::~ConeShapeDrawable()
 {
   // Do nothing
 }

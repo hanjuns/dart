@@ -97,7 +97,7 @@ if(FLANN_FOUND)
   add_subdirectory(planning)
 endif()
 
-if(TINYXML_FOUND AND TINYXML2_FOUND AND BULLET_FOUND)
+if(TINYXML_FOUND AND TINYXML2_FOUND)
   add_subdirectory(utils)
 endif()
 
@@ -145,6 +145,18 @@ target_link_libraries(
     ${Boost_LIBRARIES}
     ${PROJECT_NAME}-external-odelcpsolver
 )
+if(HAVE_OCTOMAP)
+  target_link_libraries(
+    dart
+    PUBLIC
+      ${OCTOMAP_LIBRARIES})
+endif()
+if(HAVE_BULLET)
+  target_link_libraries(
+    dart
+    PUBLIC
+      ${BULLET_LIBRARIES})
+endif()
 
 # Build DART with all available SIMD instructions
 if(DART_ENABLE_SIMD)

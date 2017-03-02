@@ -140,6 +140,19 @@ else()
   set(HAVE_SHARK FALSE)
 endif()
 
+#--------------------------------
+# Dependencies for dart-dynamics
+#--------------------------------
+
+# Octomap, for the OcTreeShape class
+find_package(Octomap QUIET)
+if(Octomap_FOUND)
+  set(HAVE_OCTOMAP TRUE)
+else()
+  message(STATUS "Looking for Octomap - NOT found, to use dart::dynamics::OcTreeShape, please install Octomap")
+  set(HAVE_OCTOMAP FALSE)
+endif()
+
 #---------------------------------
 # Dependencies for dart-collision
 #---------------------------------
@@ -179,6 +192,7 @@ if(BULLET_FOUND)
     endif()
   endif()
 
+  include_directories(${BULLET_INCLUDE_DIRS})
   set(HAVE_BULLET_COLLISION TRUE)
 else()
   message(STATUS "Looking for Bullet - NOT found, to use dart-collision-bullet, please install libbullet-dev")

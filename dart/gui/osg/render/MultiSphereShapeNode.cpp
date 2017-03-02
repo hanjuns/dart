@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2015-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2015-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
@@ -31,11 +31,13 @@
 
 #include <osg/Geode>
 #include <osg/ShapeDrawable>
+#include <osg/Light>
+#include <osg/Material>
 
-#include "dart/gui/osg/render/BoxShapeNode.hpp"
+#include "dart/gui/osg/render/MultiSphereShapeNode.hpp"
 #include "dart/gui/osg/Utils.hpp"
 
-#include "dart/dynamics/BoxShape.hpp"
+#include "dart/dynamics/MultiSphereShape.hpp"
 #include "dart/dynamics/SimpleFrame.hpp"
 
 namespace dart {
@@ -43,49 +45,55 @@ namespace gui {
 namespace osg {
 namespace render {
 
-class BoxShapeGeode : public ShapeNode, public ::osg::Geode
+//==============================================================================
+class MultiSphereShapeGeode : public ShapeNode, public ::osg::Geode
 {
 public:
 
-  BoxShapeGeode(const std::shared_ptr<dart::dynamics::BoxShape>& shape,
-                ShapeFrameNode* parentShapeFrame);
+  MultiSphereShapeGeode(dart::dynamics::MultiSphereShape* shape,
+                        ShapeFrameNode* parentShapeFrame,
+                        MultiSphereShapeNode* parentNode);
 
   void refresh();
   void extractData();
 
 protected:
 
-  virtual ~BoxShapeGeode();
+  virtual ~MultiSphereShapeGeode();
 
-  std::shared_ptr<dart::dynamics::BoxShape> mBoxShape;
-  BoxShapeDrawable* mDrawable;
+  MultiSphereShapeNode* mParentNode;
+  dart::dynamics::MultiSphereShape* mMultiSphereShape;
+  MultiSphereShapeDrawable* mDrawable;
 
 };
 
 //==============================================================================
-class BoxShapeDrawable : public ::osg::ShapeDrawable
+class MultiSphereShapeDrawable : public ::osg::ShapeDrawable
 {
 public:
 
-  BoxShapeDrawable(dart::dynamics::BoxShape* shape,
-                   dart::dynamics::VisualAspect* visualAspect);
+  MultiSphereShapeDrawable(dart::dynamics::MultiSphereShape* shape,
+                           dart::dynamics::VisualAspect* visualAspect,
+                           MultiSphereShapeGeode* parent);
 
   void refresh(bool firstTime);
 
 protected:
 
-  virtual ~BoxShapeDrawable();
+  virtual ~MultiSphereShapeDrawable();
 
-  dart::dynamics::BoxShape* mBoxShape;
+  dart::dynamics::MultiSphereShape* mMultiSphereShape;
   dart::dynamics::VisualAspect* mVisualAspect;
+  MultiSphereShapeGeode* mParent;
 
 };
 
 //==============================================================================
-BoxShapeNode::BoxShapeNode(std::shared_ptr<dart::dynamics::BoxShape> shape,
-                           ShapeFrameNode* parent)
+MultiSphereShapeNode::MultiSphereShapeNode(
+    std::shared_ptr<dart::dynamics::MultiSphereShape> shape,
+    ShapeFrameNode* parent)
   : ShapeNode(shape, parent, this),
-    mBoxShape(shape),
+    mMultiSphereShape(shape),
     mGeode(nullptr)
 {
   extractData(true);
@@ -93,7 +101,7 @@ BoxShapeNode::BoxShapeNode(std::shared_ptr<dart::dynamics::BoxShape> shape,
 }
 
 //==============================================================================
-void BoxShapeNode::refresh()
+void MultiSphereShapeNode::refresh()
 {
   mUtilized = true;
 
@@ -106,11 +114,12 @@ void BoxShapeNode::refresh()
 }
 
 //==============================================================================
-void BoxShapeNode::extractData(bool /*firstTime*/)
+void MultiSphereShapeNode::extractData(bool /*firstTime*/)
 {
   if(nullptr == mGeode)
   {
-    mGeode = new BoxShapeGeode(mBoxShape, mParentShapeFrameNode);
+    mGeode = new MultiSphereShapeGeode(
+          mMultiSphereShape.get(), mParentShapeFrameNode, this);
     addChild(mGeode);
     return;
   }
@@ -119,17 +128,19 @@ void BoxShapeNode::extractData(bool /*firstTime*/)
 }
 
 //==============================================================================
-BoxShapeNode::~BoxShapeNode()
+MultiSphereShapeNode::~MultiSphereShapeNode()
 {
   // Do nothing
 }
 
 //==============================================================================
-BoxShapeGeode::BoxShapeGeode(
-    const std::shared_ptr<dart::dynamics::BoxShape>& shape,
-    ShapeFrameNode* parentShapeFrame)
-  : ShapeNode(shape, parentShapeFrame, this),
-    mBoxShape(shape),
+MultiSphereShapeGeode::MultiSphereShapeGeode(
+    dart::dynamics::MultiSphereShape* shape,
+    ShapeFrameNode* parentShapeFrame,
+    MultiSphereShapeNode* parentNode)
+  : ShapeNode(parentNode->getShape(), parentShapeFrame, this),
+    mParentNode(parentNode),
+    mMultiSphereShape(shape),
     mDrawable(nullptr)
 {
   getOrCreateStateSet()->setMode(GL_BLEND, ::osg::StateAttribute::ON);
@@ -137,7 +148,7 @@ BoxShapeGeode::BoxShapeGeode(
 }
 
 //==============================================================================
-void BoxShapeGeode::refresh()
+void MultiSphereShapeGeode::refresh()
 {
   mUtilized = true;
 
@@ -145,11 +156,12 @@ void BoxShapeGeode::refresh()
 }
 
 //==============================================================================
-void BoxShapeGeode::extractData()
+void MultiSphereShapeGeode::extractData()
 {
   if(nullptr == mDrawable)
   {
-    mDrawable = new BoxShapeDrawable(mBoxShape.get(), mVisualAspect);
+    mDrawable = new MultiSphereShapeDrawable(
+          mMultiSphereShape, mVisualAspect, this);
     addDrawable(mDrawable);
     return;
   }
@@ -158,39 +170,54 @@ void BoxShapeGeode::extractData()
 }
 
 //==============================================================================
-BoxShapeGeode::~BoxShapeGeode()
+MultiSphereShapeGeode::~MultiSphereShapeGeode()
 {
   // Do nothing
 }
 
 //==============================================================================
-BoxShapeDrawable::BoxShapeDrawable(dart::dynamics::BoxShape* shape,
-                                   dart::dynamics::VisualAspect* visualAspect)
-  : mBoxShape(shape),
-    mVisualAspect(visualAspect)
+MultiSphereShapeDrawable::MultiSphereShapeDrawable(
+    dart::dynamics::MultiSphereShape* shape,
+    dart::dynamics::VisualAspect* visualAspect,
+    MultiSphereShapeGeode* parent)
+  : mMultiSphereShape(shape),
+    mVisualAspect(visualAspect),
+    mParent(parent)
 {
   refresh(true);
 }
 
 //==============================================================================
-void BoxShapeDrawable::refresh(bool firstTime)
+void MultiSphereShapeDrawable::refresh(bool firstTime)
 {
-  if(mBoxShape->getDataVariance() == dart::dynamics::Shape::STATIC)
+  if(mMultiSphereShape->getDataVariance() == dart::dynamics::Shape::STATIC)
     setDataVariance(::osg::Object::STATIC);
   else
     setDataVariance(::osg::Object::DYNAMIC);
 
-  if(mBoxShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_PRIMITIVE)
+  if(mMultiSphereShape->checkDataVariance(
+       dart::dynamics::Shape::DYNAMIC_PRIMITIVE)
      || firstTime)
   {
-    const Eigen::Vector3d& d = mBoxShape->getSize();
-    ::osg::ref_ptr<::osg::Box> osg_shape = new ::osg::Box(::osg::Vec3(0,0,0),
-                                                    d[0], d[1], d[2]);
+    ::osg::ref_ptr<::osg::CompositeShape> osg_shape = nullptr;
+    osg_shape = new ::osg::CompositeShape();
+
+    const auto& spheres = mMultiSphereShape->getSpheres();
+    for (const auto& sphere : spheres)
+    {
+      ::osg::ref_ptr<::osg::Sphere> osg_sphere = nullptr;
+      osg_sphere = new ::osg::Sphere(
+          ::osg::Vec3(sphere.second.x(), sphere.second.y(), sphere.second.z()),
+          sphere.first);
+      osg_shape->addChild(osg_sphere);
+    }
+
     setShape(osg_shape);
     dirtyDisplayList();
   }
 
-  if(mBoxShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_COLOR)
+  if(mMultiSphereShape->checkDataVariance(
+       dart::dynamics::Shape::DYNAMIC_COLOR)
      || firstTime)
   {
     setColor(eigToOsgVec4(mVisualAspect->getRGBA()));
@@ -198,7 +225,7 @@ void BoxShapeDrawable::refresh(bool firstTime)
 }
 
 //==============================================================================
-BoxShapeDrawable::~BoxShapeDrawable()
+MultiSphereShapeDrawable::~MultiSphereShapeDrawable()
 {
   // Do nothing
 }

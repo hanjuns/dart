@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2015-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2015-2017, Graphics Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016, Humanoid Lab, Georgia Tech Research Corporation
+ * Copyright (c) 2016-2017, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
@@ -32,10 +32,10 @@
 #include <osg/Geode>
 #include <osg/ShapeDrawable>
 
-#include "dart/gui/osg/render/BoxShapeNode.hpp"
+#include "dart/gui/osg/render/CapsuleShapeNode.hpp"
 #include "dart/gui/osg/Utils.hpp"
 
-#include "dart/dynamics/BoxShape.hpp"
+#include "dart/dynamics/CapsuleShape.hpp"
 #include "dart/dynamics/SimpleFrame.hpp"
 
 namespace dart {
@@ -43,49 +43,55 @@ namespace gui {
 namespace osg {
 namespace render {
 
-class BoxShapeGeode : public ShapeNode, public ::osg::Geode
+//==============================================================================
+class CapsuleShapeGeode : public ShapeNode, public ::osg::Geode
 {
 public:
 
-  BoxShapeGeode(const std::shared_ptr<dart::dynamics::BoxShape>& shape,
-                ShapeFrameNode* parentShapeFrame);
+  CapsuleShapeGeode(dart::dynamics::CapsuleShape* shape,
+                    ShapeFrameNode* parent,
+                    CapsuleShapeNode* parentNode);
 
   void refresh();
   void extractData();
 
 protected:
 
-  virtual ~BoxShapeGeode();
+  virtual ~CapsuleShapeGeode();
 
-  std::shared_ptr<dart::dynamics::BoxShape> mBoxShape;
-  BoxShapeDrawable* mDrawable;
+  dart::dynamics::CapsuleShape* mCapsuleShape;
+  CapsuleShapeDrawable* mDrawable;
 
 };
 
 //==============================================================================
-class BoxShapeDrawable : public ::osg::ShapeDrawable
+class CapsuleShapeDrawable : public ::osg::ShapeDrawable
 {
 public:
 
-  BoxShapeDrawable(dart::dynamics::BoxShape* shape,
-                   dart::dynamics::VisualAspect* visualAspect);
+  CapsuleShapeDrawable(dart::dynamics::CapsuleShape* shape,
+                       dart::dynamics::VisualAspect* visualAspect,
+                       CapsuleShapeGeode* parent);
 
   void refresh(bool firstTime);
 
 protected:
 
-  virtual ~BoxShapeDrawable();
+  virtual ~CapsuleShapeDrawable();
 
-  dart::dynamics::BoxShape* mBoxShape;
+  dart::dynamics::CapsuleShape* mCapsuleShape;
   dart::dynamics::VisualAspect* mVisualAspect;
+
+  CapsuleShapeGeode* mParent;
 
 };
 
 //==============================================================================
-BoxShapeNode::BoxShapeNode(std::shared_ptr<dart::dynamics::BoxShape> shape,
-                           ShapeFrameNode* parent)
+CapsuleShapeNode::CapsuleShapeNode(
+    std::shared_ptr<dart::dynamics::CapsuleShape> shape,
+    ShapeFrameNode* parent)
   : ShapeNode(shape, parent, this),
-    mBoxShape(shape),
+    mCapsuleShape(shape),
     mGeode(nullptr)
 {
   extractData(true);
@@ -93,7 +99,7 @@ BoxShapeNode::BoxShapeNode(std::shared_ptr<dart::dynamics::BoxShape> shape,
 }
 
 //==============================================================================
-void BoxShapeNode::refresh()
+void CapsuleShapeNode::refresh()
 {
   mUtilized = true;
 
@@ -106,11 +112,11 @@ void BoxShapeNode::refresh()
 }
 
 //==============================================================================
-void BoxShapeNode::extractData(bool /*firstTime*/)
+void CapsuleShapeNode::extractData(bool /*firstTime*/)
 {
   if(nullptr == mGeode)
   {
-    mGeode = new BoxShapeGeode(mBoxShape, mParentShapeFrameNode);
+    mGeode = new CapsuleShapeGeode(mCapsuleShape.get(), mParentShapeFrameNode, this);
     addChild(mGeode);
     return;
   }
@@ -119,17 +125,18 @@ void BoxShapeNode::extractData(bool /*firstTime*/)
 }
 
 //==============================================================================
-BoxShapeNode::~BoxShapeNode()
+CapsuleShapeNode::~CapsuleShapeNode()
 {
   // Do nothing
 }
 
 //==============================================================================
-BoxShapeGeode::BoxShapeGeode(
-    const std::shared_ptr<dart::dynamics::BoxShape>& shape,
-    ShapeFrameNode* parentShapeFrame)
-  : ShapeNode(shape, parentShapeFrame, this),
-    mBoxShape(shape),
+CapsuleShapeGeode::CapsuleShapeGeode(
+    dart::dynamics::CapsuleShape* shape,
+    ShapeFrameNode* parent,
+    CapsuleShapeNode* parentNode)
+  : ShapeNode(parentNode->getShape(), parent, this),
+    mCapsuleShape(shape),
     mDrawable(nullptr)
 {
   getOrCreateStateSet()->setMode(GL_BLEND, ::osg::StateAttribute::ON);
@@ -137,7 +144,7 @@ BoxShapeGeode::BoxShapeGeode(
 }
 
 //==============================================================================
-void BoxShapeGeode::refresh()
+void CapsuleShapeGeode::refresh()
 {
   mUtilized = true;
 
@@ -145,11 +152,11 @@ void BoxShapeGeode::refresh()
 }
 
 //==============================================================================
-void BoxShapeGeode::extractData()
+void CapsuleShapeGeode::extractData()
 {
   if(nullptr == mDrawable)
   {
-    mDrawable = new BoxShapeDrawable(mBoxShape.get(), mVisualAspect);
+    mDrawable = new CapsuleShapeDrawable(mCapsuleShape, mVisualAspect, this);
     addDrawable(mDrawable);
     return;
   }
@@ -158,39 +165,43 @@ void BoxShapeGeode::extractData()
 }
 
 //==============================================================================
-BoxShapeGeode::~BoxShapeGeode()
+CapsuleShapeGeode::~CapsuleShapeGeode()
 {
   // Do nothing
 }
 
 //==============================================================================
-BoxShapeDrawable::BoxShapeDrawable(dart::dynamics::BoxShape* shape,
-                                   dart::dynamics::VisualAspect* visualAspect)
-  : mBoxShape(shape),
-    mVisualAspect(visualAspect)
+CapsuleShapeDrawable::CapsuleShapeDrawable(
+    dart::dynamics::CapsuleShape* shape,
+    dart::dynamics::VisualAspect* visualAspect,
+    CapsuleShapeGeode* parent)
+  : mCapsuleShape(shape),
+    mVisualAspect(visualAspect),
+    mParent(parent)
 {
   refresh(true);
 }
 
 //==============================================================================
-void BoxShapeDrawable::refresh(bool firstTime)
+void CapsuleShapeDrawable::refresh(bool firstTime)
 {
-  if(mBoxShape->getDataVariance() == dart::dynamics::Shape::STATIC)
+  if(mCapsuleShape->getDataVariance() == dart::dynamics::Shape::STATIC)
     setDataVariance(::osg::Object::STATIC);
   else
     setDataVariance(::osg::Object::DYNAMIC);
 
-  if(mBoxShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_PRIMITIVE)
+  if(mCapsuleShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_PRIMITIVE)
      || firstTime)
   {
-    const Eigen::Vector3d& d = mBoxShape->getSize();
-    ::osg::ref_ptr<::osg::Box> osg_shape = new ::osg::Box(::osg::Vec3(0,0,0),
-                                                    d[0], d[1], d[2]);
+    double R = mCapsuleShape->getRadius();
+    double h = mCapsuleShape->getHeight();
+    ::osg::ref_ptr<::osg::Capsule> osg_shape =
+        new ::osg::Capsule(::osg::Vec3(0,0,0), R, h);
     setShape(osg_shape);
     dirtyDisplayList();
   }
 
-  if(mBoxShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_COLOR)
+  if(mCapsuleShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_COLOR)
      || firstTime)
   {
     setColor(eigToOsgVec4(mVisualAspect->getRGBA()));
@@ -198,7 +209,7 @@ void BoxShapeDrawable::refresh(bool firstTime)
 }
 
 //==============================================================================
-BoxShapeDrawable::~BoxShapeDrawable()
+CapsuleShapeDrawable::~CapsuleShapeDrawable()
 {
   // Do nothing
 }
