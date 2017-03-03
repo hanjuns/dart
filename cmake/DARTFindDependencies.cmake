@@ -144,6 +144,18 @@ endif()
 # Dependencies for dart-collision
 #---------------------------------
 
+# Octomap, for dart::dynamics::OcTreeShape
+find_package(Octomap REQUIRED)
+if(Octomap_FOUND)
+  message(STATUS "Looking for Octomap - Found ${Octomap_VERSION}")
+else()
+  message(STATUS "Looking for Octomap - NOT found. Please install octomap in order to use dart::dynamics::OcTreeShape")
+endif()
+
+#---------------------------------
+# Dependencies for dart-collision
+#---------------------------------
+
 # Bullet. Force MODULE mode to use the FindBullet.cmake file distributed with
 # CMake. Otherwise, we may end up using the BulletConfig.cmake file distributed
 # with Bullet, which uses relative paths and may break transitive dependencies.

@@ -41,6 +41,7 @@
 #include <fcl/broadphase/broadphase.h>
 #include <fcl/shape/geometric_shapes.h>
 #include <fcl/shape/geometric_shape_to_BVH_model.h>
+#include <fcl/octree.h>
 
 #include "dart/common/Console.hpp"
 #include "dart/collision/CollisionObject.hpp"
@@ -59,6 +60,7 @@
 #include "dart/dynamics/PlaneShape.hpp"
 #include "dart/dynamics/MeshShape.hpp"
 #include "dart/dynamics/SoftMeshShape.hpp"
+#include "dart/dynamics/OcTreeShape.hpp"
 
 namespace dart {
 namespace collision {
@@ -921,6 +923,7 @@ FCLCollisionDetector::createFCLCollisionGeometry(
   using dynamics::PlaneShape;
   using dynamics::MeshShape;
   using dynamics::SoftMeshShape;
+  using dynamics::OcTreeShape;
 
   fcl::CollisionGeometry* geom = nullptr;
   const auto& shapeType = shape->getType();
@@ -1029,6 +1032,14 @@ FCLCollisionDetector::createFCLCollisionGeometry(
     auto aiMesh = softMeshShape->getAssimpMesh();
 
     geom = createSoftMesh<fcl::OBBRSS>(aiMesh);
+  }
+  else if (OcTreeShape::getStaticType() == shapeType)
+  {
+    std::shared_ptr<const OcTreeShape> octree =
+        std::dynamic_pointer_cast<const OcTreeShape>(shape);
+    assert(octree);
+
+    geom = new fcl::OcTree(octree);
   }
   else
   {

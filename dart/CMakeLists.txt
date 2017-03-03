@@ -146,6 +146,16 @@ target_link_libraries(
     ${PROJECT_NAME}-external-odelcpsolver
 )
 
+target_link_libraries(
+  dart
+  PUBLIC
+    ${OCTOMAP_LIBRARIES})
+
+target_include_directories(
+  dart
+  PUBLIC
+    ${OCTOMAP_INCLUDE_DIRS})
+
 # Build DART with all available SIMD instructions
 if(DART_ENABLE_SIMD)
   if(MSVC)

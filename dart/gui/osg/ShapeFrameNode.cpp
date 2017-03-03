@@ -47,6 +47,7 @@
 #include "dart/gui/osg/render/MeshShapeNode.hpp"
 #include "dart/gui/osg/render/SoftMeshShapeNode.hpp"
 #include "dart/gui/osg/render/LineSegmentShapeNode.hpp"
+#include "dart/gui/osg/render/OcTreeShapeNode.hpp"
 #include "dart/gui/osg/render/WarningShapeNode.hpp"
 
 #include "dart/dynamics/Frame.hpp"
@@ -63,6 +64,7 @@
 #include "dart/dynamics/MeshShape.hpp"
 #include "dart/dynamics/SoftMeshShape.hpp"
 #include "dart/dynamics/LineSegmentShape.hpp"
+#include "dart/dynamics/OcTreeShape.hpp"
 #include "dart/dynamics/SimpleFrame.hpp"
 
 namespace dart {
@@ -274,6 +276,15 @@ void ShapeFrameNode::createShapeNode(
         std::dynamic_pointer_cast<LineSegmentShape>(shape);
     if(lss)
       mShapeNode = new render::LineSegmentShapeNode(lss, this);
+    else
+      warnAboutUnsuccessfulCast(shapeType, mShapeFrame->getName());
+  }
+  else if(OcTreeShape::getStaticType() == shapeType)
+  {
+    std::shared_ptr<OcTreeShape> oss =
+        std::dynamic_pointer_cast<OcTreeShape>(shape);
+    if(oss)
+      mShapeNode = new render::OcTreeShapeNode(oss, this);
     else
       warnAboutUnsuccessfulCast(shapeType, mShapeFrame->getName());
   }
