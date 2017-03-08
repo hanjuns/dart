@@ -134,6 +134,8 @@ void OcTreeShapeGeode::extractData(bool firstTime)
       || ( (dart::dynamics::Shape::DYNAMIC_VERTICES & dv) != 0)
       || ( (dart::dynamics::Shape::DYNAMIC_PRIMITIVE & dv) != 0);
 
+  const ::osg::Vec4 color = eigToOsgVec4(mVisualAspect->getRGBA());
+
   if(firstTime || resetBoxes)
   {
     removeDrawables(0, getNumDrawables());
@@ -145,7 +147,8 @@ void OcTreeShapeGeode::extractData(bool firstTime)
     octomap::OcTree::iterator end = mOcTreeShape->end();
     for(; it != end; ++it)
     {
-      if(mOcTreeShape->isNodeOccupied(*it))
+//      if(mOcTreeShape->isNodeOccupied(*it))
+      if(it->getLogOdds() > 0)
       {
         Eigen::Vector3d c(it.getX(), it.getY(), it.getZ());
         boxes.push_back(c);
@@ -159,6 +162,7 @@ void OcTreeShapeGeode::extractData(bool firstTime)
       ::osg::ref_ptr< ::osg::ShapeDrawable> drawable =
           new ::osg::ShapeDrawable(
             new ::osg::Box(::osg::Vec3(c[0], c[1], c[2]), resolution));
+      drawable->setColor(color);
 
       addDrawable(drawable);
     }
@@ -167,8 +171,6 @@ void OcTreeShapeGeode::extractData(bool firstTime)
   const bool resetColor = dart::dynamics::Shape::DYNAMIC_COLOR == dv;
   if(firstTime || resetColor)
   {
-    const ::osg::Vec4 color = eigToOsgVec4(mVisualAspect->getRGBA());
-
     const size_t numChildren = getNumDrawables();
     for(size_t i=0; i < numChildren; ++i)
     {
