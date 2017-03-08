@@ -140,28 +140,32 @@ void OcTreeShapeGeode::extractData(bool firstTime)
   {
     removeDrawables(0, getNumDrawables());
 
-    std::vector<Eigen::Vector3d> boxes;
+    std::vector<Eigen::Vector4d> boxes;
+//    std::vector<Eigen::Vector3d> boxes;
     boxes.reserve(mOcTreeShape->size()/2);
     octomap::OcTree::iterator it =
             mOcTreeShape->begin(mOcTreeShape->getTreeDepth());
     octomap::OcTree::iterator end = mOcTreeShape->end();
     for(; it != end; ++it)
     {
-//      if(mOcTreeShape->isNodeOccupied(*it))
-      if(it->getLogOdds() > 0)
+      if(mOcTreeShape->isNodeOccupied(*it))
+//      if(it->getLogOdds() > 0)
       {
-        Eigen::Vector3d c(it.getX(), it.getY(), it.getZ());
+        Eigen::Vector4d c(it.getX(), it.getY(), it.getZ(), it.getSize());
+//        Eigen::Vector4d c(it.getX(), it.getY(), it.getZ());
         boxes.push_back(c);
       }
     }
 
-    const double resolution = mOcTreeShape->getResolution();
+//    const double resolution = mOcTreeShape->getResolution();
 
-    for(const Eigen::Vector3d& c : boxes)
+//    for(const Eigen::Vector3d& c : boxes)
+    for(const Eigen::Vector4d& c : boxes)
     {
       ::osg::ref_ptr< ::osg::ShapeDrawable> drawable =
           new ::osg::ShapeDrawable(
-            new ::osg::Box(::osg::Vec3(c[0], c[1], c[2]), resolution));
+//            new ::osg::Box(::osg::Vec3(c[0], c[1], c[2]), resolution));
+            new ::osg::Box(::osg::Vec3(c[0], c[1], c[2]), c[3]));
       drawable->setColor(color);
 
       addDrawable(drawable);

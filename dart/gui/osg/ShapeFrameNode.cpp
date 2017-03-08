@@ -291,7 +291,7 @@ void ShapeFrameNode::createShapeNode(
     std::shared_ptr<OcTreeShape> oss =
         std::dynamic_pointer_cast<OcTreeShape>(shape);
     if(oss)
-      mShapeNode = new render::OcTreeShapeNode(oss, this);
+      mRenderShapeNode = new render::OcTreeShapeNode(oss, this);
     else
       warnAboutUnsuccessfulCast(shapeType, mShapeFrame->getName());
   }
