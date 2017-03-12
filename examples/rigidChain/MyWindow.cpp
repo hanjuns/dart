@@ -38,8 +38,8 @@ MyWindow::~MyWindow() {
 }
 
 void MyWindow::timeStepping() {
-  Eigen::VectorXd damping = computeDamping();
-  mWorld->getSkeleton(0)->setForces(damping);
+//  Eigen::VectorXd damping = computeDamping();
+//  mWorld->getSkeleton(0)->setForces(damping);
   mWorld->step();
 }
 
