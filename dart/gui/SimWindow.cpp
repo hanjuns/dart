@@ -202,7 +202,7 @@ void SimWindow::draw() {
 #ifdef _WIN32
     _snprintf(buff, sizeof(buff), "%d", mWorld->getSimFrames());
 #else
-    std::snprintf(buff, sizeof(buff), "%d", mWorld->getSimFrames());
+    std::snprintf(buff, sizeof(buff), "%f", mWorld->getTime());
 #endif
   std::string frame(buff);
   glColor3f(0.0, 0.0, 0.0);

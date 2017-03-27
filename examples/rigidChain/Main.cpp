@@ -40,6 +40,7 @@ int main(int argc, char* argv[]) {
   assert(myWorld != nullptr);
 
   // create and initialize the world
+//  Eigen::Vector3d gravity(0.0, 0.0, -9.8);
   Eigen::Vector3d gravity(0.0, 0.0, 0.0);
   myWorld->setGravity(gravity);
   myWorld->setTimeStep(1.0/2000);
@@ -48,7 +49,9 @@ int main(int argc, char* argv[]) {
   Eigen::VectorXd initPose(dof);
   for (int i = 0; i < dof; i++) {
     initPose[i] = dart::math::random(-0.5, 0.5);
-    myWorld->getSkeleton(0)->getDof(i)->setSpringStiffness(1.);
+//    myWorld->getSkeleton(0)->getDof(i)->setSpringStiffness(1.);
+    myWorld->getSkeleton(0)->getDof(i)->setSpringStiffness(0.1);
+//    myWorld->getSkeleton(0)->getDof(i)->setSpringStiffness(0.0);
     myWorld->getSkeleton(0)->getDof(i)->setDampingCoefficient(0.);
   }
   myWorld->getSkeleton(0)->setPositions(initPose);
