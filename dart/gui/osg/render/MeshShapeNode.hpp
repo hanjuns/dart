@@ -1,7 +1,7 @@
 /*
+ * Copyright (c) 2015-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2015-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2015-2017, Graphics Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -36,6 +36,7 @@
 
 #include <osg/MatrixTransform>
 #include <osg/Material>
+#include <osg/Texture2D>
 
 #include "dart/gui/osg/render/ShapeNode.hpp"
 
@@ -55,9 +56,13 @@ class osgAiNode;
 class MeshShapeGeode;
 class MeshShapeGeometry;
 
+using TextureMap = std::map< ::osg::Material*, ::osg::ref_ptr< ::osg::Texture2D> >;
+
 class MeshShapeNode : public ShapeNode, public ::osg::MatrixTransform
 {
 public:
+
+  friend class MeshShapeGeometry;
 
   MeshShapeNode(std::shared_ptr<dart::dynamics::MeshShape> shape,
                 ShapeFrameNode* parentNode);
@@ -73,7 +78,8 @@ protected:
 
   std::shared_ptr<dart::dynamics::MeshShape> mMeshShape;
   osgAiNode* mRootAiNode;
-  std::vector< ::osg::ref_ptr<::osg::Material> > mMaterials;
+  std::vector< ::osg::ref_ptr< ::osg::Material> > mMaterials;
+  TextureMap mTextures;
 
 };
 

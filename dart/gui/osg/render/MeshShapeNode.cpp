@@ -1,7 +1,7 @@
 /*
+ * Copyright (c) 2015-2016, Graphics Lab, Georgia Tech Research Corporation
  * Copyright (c) 2015-2016, Humanoid Lab, Georgia Tech Research Corporation
- * Copyright (c) 2015-2017, Graphics Lab, Georgia Tech Research Corporation
- * Copyright (c) 2016-2017, Personal Robotics Lab, Carnegie Mellon University
+ * Copyright (c) 2016, Personal Robotics Lab, Carnegie Mellon University
  * All rights reserved.
  *
  * This file is provided under the following "BSD-style" License:
@@ -34,6 +34,7 @@
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/CullFace>
+#include <osgDB/ReadFile>
 
 #include "dart/gui/osg/render/MeshShapeNode.hpp"
 #include "dart/gui/osg/Utils.hpp"
@@ -171,26 +172,54 @@ bool checkSpecularSanity(const aiColor4D& c)
   return true;
 }
 
+
+//==============================================================================
+std::string toText(const aiColor4D& c)
+{
+  std::string s;
+  s += std::to_string(c.r) + " "
+     + std::to_string(c.g) + " "
+     + std::to_string(c.b) + " "
+     + std::to_string(c.a);
+
+  return s;
+}
+
+
 //==============================================================================
 void MeshShapeNode::extractData(bool firstTime)
 {
   const aiScene* scene = mMeshShape->getMesh();
   const aiNode* root = scene->mRootNode;
 
-  if(firstTime) // extract material properties
+  if(firstTime) // extract material and texture properties
   {
     mMaterials.reserve(scene->mNumMaterials);
 
     for(std::size_t i=0; i<scene->mNumMaterials; ++i)
     {
       aiMaterial* aiMat = scene->mMaterials[i];
-      ::osg::ref_ptr<::osg::Material> material = new ::osg::Material;
+      ::osg::ref_ptr< ::osg::Material> material = new ::osg::Material;
 
       aiColor4D c;
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_AMBIENT, &c)==AI_SUCCESS)
       {
         material->setAmbient(::osg::Material::FRONT_AND_BACK,
                              ::osg::Vec4(c.r, c.g, c.b, c.a));
+
+        if(aiMat->GetTextureCount(aiTextureType_AMBIENT) > 0)
+        {
+          aiString s;
+          aiMat->GetTexture(aiTextureType_AMBIENT, 0, &s);
+          ::osg::ref_ptr< ::osg::Texture2D> texture = new ::osg::Texture2D;
+          ::osg::Image* teximage = osgDB::readImageFile(s.C_Str());
+          texture->setImage(teximage);
+          texture->setWrap( ::osg::Texture2D::WRAP_S, ::osg::Texture2D::REPEAT);
+          texture->setWrap( ::osg::Texture2D::WRAP_T, ::osg::Texture2D::REPEAT);
+          texture->setWrap( ::osg::Texture2D::WRAP_R, ::osg::Texture2D::REPEAT);
+
+          mTextures[material.get()] = texture;
+        }
       }
 
       if(aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_DIFFUSE, &c)==AI_SUCCESS)
@@ -203,6 +232,7 @@ void MeshShapeNode::extractData(bool firstTime)
       {
         // Some files have insane specular vectors like [1.0, 1.0, 1.0, 1.0], so
         // we weed those out here
+
         if(checkSpecularSanity(c))
           material->setSpecular(::osg::Material::FRONT_AND_BACK,
                                 ::osg::Vec4(c.r, c.g, c.b, c.a));
@@ -232,16 +262,24 @@ void MeshShapeNode::extractData(bool firstTime)
 
       mMaterials.push_back(material);
     }
+
+//    std::cout << "nt: " << scene->mNumTextures << std::endl;
+//    for(size_t i=0; i < scene->mNumTextures; ++i)
+//    {
+//      aiTexture* aiTex = scene->mTextures[i];
+//      ::osg::ref_ptr< ::osg::Texture2D> texture = new ::osg::Texture2D;
+//      aiTex->
+//    }
   }
 
   if(   mShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_TRANSFORM)
      || mShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_PRIMITIVE)
      || firstTime)
   {
-    Eigen::Matrix4d S(Eigen::Matrix4d::Zero());
-    const Eigen::Vector3d& s = mMeshShape->getScale();
-    S(0,0) = s[0]; S(1,1) = s[1]; S(2,2) = s[2]; S(3,3) = 1.0;
-    setMatrix(eigToOsgMatrix(S));
+//    Eigen::Matrix4d S(Eigen::Matrix4d::Zero());
+//    const Eigen::Vector3d& s = mMeshShape->getScale();
+//    S(0,0) = s[0]; S(1,1) = s[1]; S(2,2) = s[2]; S(3,3) = 1.0;
+//    setMatrix(eigToOsgMatrix(S));
   }
 
   if(mRootAiNode)
@@ -390,6 +428,7 @@ MeshShapeGeode::MeshShapeGeode(dart::dynamics::MeshShape* shape,
 {
   getOrCreateStateSet()->setMode(GL_BLEND, ::osg::StateAttribute::ON);
   getOrCreateStateSet()->setAttributeAndModes(new ::osg::CullFace(::osg::CullFace::BACK));
+  getOrCreateStateSet()->setRenderingHint(::osg::StateSet::TRANSPARENT_BIN);
   extractData(true);
 }
 
@@ -535,23 +574,23 @@ void MeshShapeGeometry::extractData(bool firstTime)
      || mShape->checkDataVariance(dart::dynamics::Shape::DYNAMIC_ELEMENTS)
      || firstTime)
   {
+    const Eigen::Vector3d& scale = mMeshShape->getScale();
+
     if(mVertices->size() != mAiMesh->mNumVertices)
       mVertices->resize(mAiMesh->mNumVertices);
 
     if(mNormals->size() != mAiMesh->mNumVertices)
       mNormals->resize(mAiMesh->mNumVertices);
 
-    const Eigen::Vector3d s = mMeshShape->getScale();
-
     for(std::size_t i=0; i<mAiMesh->mNumVertices; ++i)
     {
       const aiVector3D& v = mAiMesh->mVertices[i];
-      (*mVertices)[i] = ::osg::Vec3(v.x, v.y, v.z);
+      (*mVertices)[i] = ::osg::Vec3(scale[0]*v.x, scale[1]*v.y, scale[2]*v.z);
 
       if(mAiMesh->mNormals)
       {
         const aiVector3D& n = mAiMesh->mNormals[i];
-        (*mNormals)[i] = ::osg::Vec3(n.x*s[0], n.y*s[1], n.z*s[2]);
+        (*mNormals)[i] = ::osg::Vec3(n.x, n.y, n.z);
       }
       // TODO(MXG): Consider computing normals for meshes that don't come with
       // normal data per vertex
@@ -634,51 +673,70 @@ void MeshShapeGeometry::extractData(bool firstTime)
     }
   }
 
+  const aiScene* scene = mMeshShape->getMesh();
   // Load textures on the first pass through
-  if(firstTime)
+  if(firstTime && scene->HasMaterials())
   {
     uint unit = 0;
     const aiVector3D* aiTexCoords = mAiMesh->mTextureCoords[unit];
 
     while(nullptr != aiTexCoords)
     {
-      switch(mAiMesh->mNumUVComponents[unit])
+      const int n = mAiMesh->mNumUVComponents[unit];
+      switch(n)
       {
         case 1:
         {
-          ::osg::ref_ptr<::osg::FloatArray> texture =
+          ::osg::ref_ptr< ::osg::FloatArray> texture =
               new ::osg::FloatArray(mAiMesh->mNumVertices);
           for(std::size_t i=0; i<mAiMesh->mNumVertices; ++i)
             (*texture)[i] = aiTexCoords[i].x;
+
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
         }
         case 2:
         {
-          ::osg::ref_ptr<::osg::Vec2Array> texture =
+          ::osg::ref_ptr< ::osg::Vec2Array> texture =
               new ::osg::Vec2Array(mAiMesh->mNumVertices);
           for(std::size_t i=0; i<mAiMesh->mNumVertices; ++i)
           {
             const aiVector3D& t = aiTexCoords[i];
             (*texture)[i] = ::osg::Vec2(t.x, t.y);
           }
+
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
         }
         case 3:
         {
-          ::osg::ref_ptr<::osg::Vec3Array> texture =
+          ::osg::ref_ptr< ::osg::Vec3Array> texture =
               new ::osg::Vec3Array(mAiMesh->mNumVertices);
           for(std::size_t i=0; i<mAiMesh->mNumVertices; ++i)
           {
             const aiVector3D& t = aiTexCoords[i];
             (*texture)[i] = ::osg::Vec3(t.x, t.y, t.z);
           }
+
           setTexCoordArray(unit, texture, ::osg::Array::BIND_PER_VERTEX);
           break;
         }
       } // switch(mAiMesh->mNumUVComponents[unit])
       aiTexCoords = mAiMesh->mTextureCoords[++unit];
+
+      const int mat = mAiMesh->mMaterialIndex;
+      ::osg::StateSet* ss = getOrCreateStateSet();
+      ::osg::ref_ptr< ::osg::Material> osgMat = mMainNode->mMaterials[mat];
+      ss->setAttribute(osgMat);
+
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+      TextureMap::iterator it = mMainNode->mTextures.find(osgMat.get());
+      if(it != mMainNode->mTextures.end())
+      {
+        ss->setTextureAttributeAndModes(0, it->second, ::osg::StateAttribute::ON);
+      }
     } // while(nullptr != aiTexCoords)
   }
 }
