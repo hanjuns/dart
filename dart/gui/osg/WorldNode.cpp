@@ -256,11 +256,18 @@ void WorldNode::refreshShapeFrameNode(dart::dynamics::Frame* frame)
   if(!inserted)
   {
     ShapeFrameNode* node = it->second;
-    if(!node)
-      return;
+//    if(!node)
+//      return;
 
-    node->refresh(true);
-    return;
+    if(node && node->getShapeFrame() != nullptr)
+    {
+      node->refresh(true);
+      return;
+    }
+    else if(node)
+    {
+      removeChild(node);
+    }
   }
 
   if(!frame->isShapeFrame())
@@ -272,8 +279,8 @@ void WorldNode::refreshShapeFrameNode(dart::dynamics::Frame* frame)
     return;
   }
 
-  ::osg::ref_ptr<ShapeFrameNode> node = new ShapeFrameNode(frame->asShapeFrame(),
-                                                         this);
+  ::osg::ref_ptr<ShapeFrameNode> node =
+      new ShapeFrameNode(frame->asShapeFrame(), this);
   it->second = node;
   addChild(node);
 }

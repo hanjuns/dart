@@ -35,6 +35,7 @@
 #include <map>
 #include <memory>
 #include <osg/MatrixTransform>
+#include "dart/common/sub_ptr.hpp"
 #include "dart/dynamics/SmartPointer.hpp"
 
 namespace dart {
@@ -94,7 +95,7 @@ protected:
   void createShapeNode(const std::shared_ptr<dart::dynamics::Shape>& shape);
 
   /// Pointer to the ShapeFrame that this ShapeFrameNode is associated with
-  dart::dynamics::ShapeFrame* mShapeFrame;
+  dart::common::sub_ptr<dart::dynamics::ShapeFrame> mShapeFrame;
 
   /// Pointer to the WorldNode that this ShapeFrameNode belongs to
   WorldNode* mWorldNode;
