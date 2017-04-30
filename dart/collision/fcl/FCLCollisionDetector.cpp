@@ -650,9 +650,12 @@ fcl::BVHModel<BV>* createSoftMesh(const aiMesh* _mesh)
 
 
 //==============================================================================
-std::shared_ptr<FCLCollisionDetector> FCLCollisionDetector::create()
+std::shared_ptr<FCLCollisionDetector> FCLCollisionDetector::create(
+    PrimitiveShape shapeType,
+    ContactPointComputationMethod method)
 {
-  return std::shared_ptr<FCLCollisionDetector>(new FCLCollisionDetector());
+  return std::shared_ptr<FCLCollisionDetector>(
+        new FCLCollisionDetector(shapeType, method));
 }
 
 //==============================================================================
@@ -665,7 +668,8 @@ FCLCollisionDetector::~FCLCollisionDetector()
 std::shared_ptr<CollisionDetector>
 FCLCollisionDetector::cloneWithoutCollisionObjects()
 {
-  return FCLCollisionDetector::create();
+  return FCLCollisionDetector::create(mPrimitiveShapeType,
+                                      mContactPointComputationMethod);
 }
 
 //==============================================================================
@@ -867,10 +871,12 @@ FCLCollisionDetector::getContactPointComputationMethod() const
 }
 
 //==============================================================================
-FCLCollisionDetector::FCLCollisionDetector()
+FCLCollisionDetector::FCLCollisionDetector(
+    PrimitiveShape shapeType,
+    ContactPointComputationMethod method)
   : CollisionDetector(),
-    mPrimitiveShapeType(MESH),
-    mContactPointComputationMethod(DART)
+    mPrimitiveShapeType(shapeType),
+    mContactPointComputationMethod(method)
 {
   mCollisionObjectManager.reset(new ManagerForSharableCollisionObjects(this));
 }

@@ -47,8 +47,6 @@ class FCLCollisionDetector : public CollisionDetector
 {
 public:
 
-  static std::shared_ptr<FCLCollisionDetector> create();
-
   /// Whether to use analytic collision checking for primitive shapes.
   ///
   /// PRIMITIVE: Use FCL's analytic collision checking for primitive shapes.
@@ -79,6 +77,10 @@ public:
     FCL = 0,
     DART
   };
+
+  static std::shared_ptr<FCLCollisionDetector> create(
+      PrimitiveShape shapeType = MESH,
+      ContactPointComputationMethod method = DART);
 
   /// Constructor
   virtual ~FCLCollisionDetector();
@@ -136,7 +138,9 @@ public:
 protected:
 
   /// Constructor
-  FCLCollisionDetector();
+  FCLCollisionDetector(
+      PrimitiveShape shapeType,
+      ContactPointComputationMethod method);
 
   // Documentation inherited
   std::unique_ptr<CollisionObject> createCollisionObject(
