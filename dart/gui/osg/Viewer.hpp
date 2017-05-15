@@ -285,7 +285,9 @@ public:
   void updateDragAndDrops();
 
   /// Get the root ::osg::Group of this Viewer
-  const ::osg::ref_ptr<::osg::Group>& getRootGroup() const;
+  const ::osg::ref_ptr< ::osg::Group >& getRootGroup() const;
+
+  void setRootGroup(::osg::ref_ptr< ::osg::Group > root);
 
 protected:
 

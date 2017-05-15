@@ -344,6 +344,8 @@ void SupportPolygonVisual::initialize()
   mDisplayPolygon = true;
   mPolygonGeode = new ::osg::Geode;
   mPolygonGeode->getOrCreateStateSet()->setMode(GL_LIGHTING, ::osg::StateAttribute::OFF);
+  mPolygonGeode->getOrCreateStateSet()->setMode(GL_BLEND, ::osg::StateAttribute::ON);
+  mPolygonGeode->getOrCreateStateSet()->setRenderingHint(::osg::StateSet::TRANSPARENT_BIN);
   addChild(mPolygonGeode);
 
   mPolygonGeom = new ::osg::Geometry;

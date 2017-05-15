@@ -830,6 +830,13 @@ const ::osg::ref_ptr<::osg::Group>& Viewer::getRootGroup() const
   return mRootGroup;
 }
 
+//==============================================================================
+void Viewer::setRootGroup(::osg::ref_ptr< ::osg::Group> root)
+{
+  mRootGroup = root;
+  setSceneData(mRootGroup);
+}
+
 } // namespace osg
 } // namespace gui
 } // namespace dart

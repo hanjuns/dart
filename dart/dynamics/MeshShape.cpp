@@ -180,8 +180,14 @@ void MeshShape::notifyAlphaUpdated(double alpha)
   for(std::size_t i=0; i<mMesh->mNumMeshes; ++i)
   {
     aiMesh* mesh = mMesh->mMeshes[i];
-    for(std::size_t j=0; j<mesh->mNumVertices; ++j)
-      mesh->mColors[0][j][3] = alpha;
+    if(mesh)
+    {
+      for(std::size_t j=0; j<mesh->mNumVertices; ++j)
+      {
+        if(mesh->mColors[0])
+          mesh->mColors[0][j][3] = alpha;
+      }
+    }
   }
 }
 

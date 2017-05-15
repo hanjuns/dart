@@ -133,6 +133,11 @@ BoxShapeGeode::BoxShapeGeode(
     mDrawable(nullptr)
 {
   getOrCreateStateSet()->setMode(GL_BLEND, ::osg::StateAttribute::ON);
+  if(mShapeFrame->getVisualAspect() &&
+     mShapeFrame->getVisualAspect()->getAlpha() < 1.0)
+  {
+    getOrCreateStateSet()->setRenderingHint(::osg::StateSet::TRANSPARENT_BIN);
+  }
   extractData();
 }
 
