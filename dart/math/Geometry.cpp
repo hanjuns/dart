@@ -1757,11 +1757,13 @@ SupportPolygon computeConvexHull(std::vector<std::size_t>& _originalIndices,
 }
 
 //==============================================================================
-IntersectionResult computeIntersection(Eigen::Vector2d& _intersectionPoint,
-                                   const Eigen::Vector2d& a1,
-                                   const Eigen::Vector2d& a2,
-                                   const Eigen::Vector2d& b1,
-                                   const Eigen::Vector2d& b2)
+IntersectionResult computeIntersection(
+    Eigen::Vector2d& _intersectionPoint,
+    const Eigen::Vector2d& a1,
+    const Eigen::Vector2d& a2,
+    const Eigen::Vector2d& b1,
+    const Eigen::Vector2d& b2,
+    const double tolerance)
 {
   double dx_a = a2[0] - a1[0];
   double dy_a = a2[1] - a1[1];
@@ -1788,14 +1790,14 @@ IntersectionResult computeIntersection(Eigen::Vector2d& _intersectionPoint,
 
   for(std::size_t i=0; i < 2; ++i)
   {
-    if( (point[i] < std::min(a1[i], a2[i]))
-        || (std::max(a1[i], a2[i]) < point[i]) )
+    if( (point[i] - tolerance*std::abs(a1[i]-a2[i]) < std::min(a1[i], a2[i])) ||
+        (std::max(a1[i], a2[i]) < point[i] + tolerance*std::abs(a1[i]-a2[i])) )
     {
       return BEYOND_ENDPOINTS;
     }
 
-    if( (point[i] < std::min(b1[i], b2[i]))
-        || (std::max(b1[i], b2[i]) < point[i]))
+    if( (point[i] - tolerance*std::abs(b1[i]-b2[i]) < std::min(b1[i], b2[i])) ||
+        (std::max(b1[i], b2[i]) < point[i] + tolerance*std::abs(b1[i]-b2[i])) )
     {
       return BEYOND_ENDPOINTS;
     }

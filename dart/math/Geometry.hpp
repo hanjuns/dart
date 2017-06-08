@@ -534,12 +534,18 @@ enum IntersectionResult {
 
 /// Compute the intersection between a line segment that goes from a1 -> a2 and
 /// a line segment that goes from b1 -> b2.
+///
+/// The argument 'tolerance' can be used to accept intersection points that are
+/// outside the boundaries of the line segments. The value given to 'tolerance'
+/// will be multiplied by the length of the line segments to determine how far
+/// the acceptable margin extends beyond the boundaries.
 IntersectionResult computeIntersection(
     Eigen::Vector2d& _intersectionPoint,
     const Eigen::Vector2d& a1,
     const Eigen::Vector2d& a2,
     const Eigen::Vector2d& b1,
-    const Eigen::Vector2d& b2);
+    const Eigen::Vector2d& b2,
+    const double tolerance = 0.0);
 
 /// Compute a 2D cross product
 double cross(const Eigen::Vector2d& _v1, const Eigen::Vector2d& _v2);
