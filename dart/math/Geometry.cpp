@@ -1586,7 +1586,7 @@ Eigen::Vector2d computeCentroidOfHull(const SupportPolygon& _convexHull)
     midp01 = 0.5 * (p0+p1);
 
     IntersectionResult result =
-        computeIntersection(intersect, p0, midp12, p2, midp01);
+        computeIntersection(intersect, p0, midp12, p2, midp01, 0.01);
 
     if(BEYOND_ENDPOINTS == result)
     {
