@@ -426,9 +426,12 @@ MeshShapeGeode::MeshShapeGeode(dart::dynamics::MeshShape* shape,
     mAiNode(node),
     mMainNode(parentNode)
 {
-//  getOrCreateStateSet()->setMode(GL_BLEND, ::osg::StateAttribute::ON);
-//  getOrCreateStateSet()->setAttributeAndModes(new ::osg::CullFace(::osg::CullFace::BACK));
-//  getOrCreateStateSet()->setRenderingHint(::osg::StateSet::TRANSPARENT_BIN);
+  if(mVisualAspect->getAlpha() < 1.0)
+  {
+    getOrCreateStateSet()->setMode(GL_BLEND, ::osg::StateAttribute::ON);
+    getOrCreateStateSet()->setAttributeAndModes(new ::osg::CullFace(::osg::CullFace::BACK));
+    getOrCreateStateSet()->setRenderingHint(::osg::StateSet::TRANSPARENT_BIN);
+  }
   extractData(true);
 }
 

@@ -125,6 +125,9 @@ std::size_t LineSegmentShape::addVertex(const Eigen::Vector3d& _v, std::size_t _
   std::size_t index = mVertices.size();
   mVertices.push_back(_v);
 
+  if(INVALID_INDEX == _parent)
+    return index;
+
   if(_parent > mVertices.size())
   {
     if(mVertices.size() == 0)
